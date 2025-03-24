@@ -14,18 +14,21 @@ class Server(FastMCP, ABC):
         self.store = store
         super().__init__(name, description, **kwargs)
 
+    @abstractmethod
+    def _load_apps(self):
+        pass
+
 
 class TestServer(Server):
     """
     Test server for development purposes
     """
-    def __init__(self, **kwargs):
+    def __init__(self, apps_list: list[str] = [], **kwargs):
         super().__init__(**kwargs)
-        self.apps_list = ["zenquotes"]
-        self.__load_apps()
+        self.apps_list = apps_list
+        self._load_apps()
 
-    def __load_apps(self):
-        self.apps = []
+    def _load_apps(self):
         for app in self.apps_list:
             if app == "zenquotes":
                 app = ZenQuoteApp(store=self.store)

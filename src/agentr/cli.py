@@ -1,5 +1,4 @@
 import typer
-import yaml
 from pathlib import Path
 
 app = typer.Typer()
@@ -24,6 +23,36 @@ def generate(schema_path: Path = typer.Option(..., "--schema", "-s")):
         raise typer.Exit(1)
     code = generate_api_client(schema)
     print(code)
+
+@app.command()
+def run():
+    """Run the MCP server"""
+    from agentr.test import mcp
+    mcp.run()
+
+@app.command()
+def install(app_name: str):
+    """Install an app"""
+    import json
+    api_key = typer.prompt("Enter your API key", hide_input=True)
+    if app_name == "claude":
+        typer.echo(f"Installing mcp server for: {app_name}")
+        config_path = '~/Library/Application Support/Claude/claude_desktop_config.json'
+        with open(config_path, 'r') as f:
+            config = json.load(f)
+        config['mcpServers']['agentr-r'] = {
+            "command": "uvx",
+            "args": ["agentr@latest", "run"],
+            "env": {
+                "AGENTR_API_KEY": api_key
+            }
+        }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+        typer.echo("App installed successfully")
+    else:
+        typer.echo(f"App {app_name} not supported")
+
 
 if __name__ == "__main__":
     app()
