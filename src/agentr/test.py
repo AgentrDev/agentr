@@ -23,6 +23,13 @@ apps_list = [
             "name": "github",
             "type": "agentr",
         }
+    },
+    {
+        "name": "reddit",
+        "integration": {
+            "name": "reddit",
+            "type": "agentr"
+        }
     }
 ]
 mcp = TestServer(name="Test Server", description="Test Server", apps_list=apps_list)
@@ -30,8 +37,8 @@ mcp = TestServer(name="Test Server", description="Test Server", apps_list=apps_l
 async def test():
     tools = await mcp.list_tools()
     print(tools)
-    result = await mcp.call_tool("star_repository", {"repo_full_name": "manojbajaj95/config"})
-    print(result)
+    # result = await mcp.call_tool("star_repository", {"repo_full_name": "manojbajaj95/config"})
+    # print(result)
 
 if __name__ == "__main__":
     import asyncio
