@@ -21,10 +21,10 @@ class RedditApp(APIApplication):
         if "access_token" not in credentials:
              logger.error("Reddit credentials found but missing 'access_token'.")
              raise ValueError("Invalid Reddit credentials format.")
-        user_agent = "linux:agentr-reddit-app:0.1.0 (by  u/LoNeWolF26548 )" 
+
         return {
             "Authorization": f"Bearer {credentials['access_token']}",
-            "User-Agent": user_agent
+            "User-Agent": "agentr-reddit-app/0.1 by AgentR"
         }
 
     def get_subreddit_posts(self, subreddit: str, limit: int = 5, timeframe: str = "day") -> str:
@@ -102,7 +102,7 @@ class RedditApp(APIApplication):
         except Exception as e:
             logger.exception(f"An unexpected error occurred while fetching posts from r/{subreddit}: {e}")
             return f"An unexpected error occurred while trying to get posts from r/{subreddit}."
-        
+
     def search_subreddits(self, query: str, limit: int = 5, sort: str = "relevance") -> str:
         """Search for subreddits matching a query string.
         
@@ -175,7 +175,8 @@ class RedditApp(APIApplication):
             return f"An unexpected error occurred while trying to search for subreddits."
 
     def list_tools(self):
+        # Add the new tool to the list
         return [
             self.get_subreddit_posts, 
-            self.search_subreddits,
+            self.search_subreddits  # <<< Added this line
         ]
