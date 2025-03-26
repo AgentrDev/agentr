@@ -142,3 +142,6 @@ agentr install claude
   - typer >= 0.15.2
 
 
+## 📝 License
+
+This project is licensed under the MIT License.
