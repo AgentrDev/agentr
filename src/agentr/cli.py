@@ -1,5 +1,6 @@
 import typer
 from pathlib import Path
+import sys
 
 app = typer.Typer()
 
@@ -44,7 +45,17 @@ def install(app_name: str):
 
     if app_name == "claude":
         typer.echo(f"Installing mcp server for: {app_name}")
-        config_path = Path.home() / "Library/Application Support/Claude/claude_desktop_config.json"
+
+        # Determine platform-specific config path
+        if sys.platform == "darwin":  # macOS
+            config_path = Path.home() / "Library/Application Support/Claude/claude_desktop_config.json"
+        elif sys.platform == "win32":  # Windows
+            config_path = Path.home() / "AppData/Roaming/Claude/claude_desktop_config.json"
+        else:
+            typer.echo("Unsupported platform. Only macOS and Windows are currently supported.", err=True)
+            raise typer.Exit(1)
+        
+        
         with open(config_path, 'r') as f:
             config = json.load(f)
         config['mcpServers']['agentr-r'] = {
