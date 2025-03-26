@@ -161,5 +161,52 @@ class GithubApp(APIApplication):
         except Exception as e:
             return f"Error retrieving pull requests: {str(e)}"
 
+    def list_issues(self, repo_full_name: str, per_page: int = 30, page: int = 1) -> str:
+        """List issues for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            per_page: The number of results per page (max 100)
+            page: The page number of the results to fetch
+            
+        Returns:
+            A formatted list of issues
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            
+            # Construct the URL for the issues endpoint
+            url = f"https://api.github.com/repos/{repo_full_name}/issues/events"
+            
+            # Prepare the query parameters
+            params = {
+                "per_page": per_page,
+                "page": page
+            }
+            
+            response = self._get(url, params=params)
+            
+            if response.status_code == 200:
+                issues = response.json()
+                if not issues:
+                    return f"No issues found for repository {repo_full_name}"
+                
+                result = f"Issues for {repo_full_name} (Page {page}):\n\n"
+                for issue in issues:
+                    issue_title = issue.get("issue", {}).get("title", "No Title")
+                    issue_number = issue.get("issue", {}).get("number", "Unknown")
+                    issue_state = issue.get("issue", {}).get("state", "Unknown")
+                    issue_user = issue.get("issue", {}).get("user", {}).get("login", "Unknown")
+                    
+                    result += f"- Issue #{issue_number}: {issue_title} (by {issue_user}, Status: {issue_state})\n"
+                
+                return result
+            elif response.status_code == 404:
+                return f"Repository {repo_full_name} not found"
+            else:
+                return f"Error retrieving issues: {response.status_code} - {response.text}"
+        except Exception as e:
+            return f"Error retrieving issues: {str(e)}"
+
     def list_tools(self):
-        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests]
+        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests, self.list_issues]
