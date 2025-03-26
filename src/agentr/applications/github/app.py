@@ -121,11 +121,12 @@ class GithubApp(APIApplication):
         except Exception as e:
             return f"Error retrieving branches: {str(e)}"
     
-    def list_pull_requests(self, repo_full_name: str) -> str:
+    def list_pull_requests(self, repo_full_name: str, state: str = "open") -> str:
         """List pull requests for a GitHub repository
         
         Args:
             repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            state: The state of the pull requests to filter by (open, closed, or all)
             
         Returns:
             A formatted list of pull requests
@@ -134,14 +135,16 @@ class GithubApp(APIApplication):
             repo_full_name = repo_full_name.strip()
             
             url = f"https://api.github.com/repos/{repo_full_name}/pulls"
-            response = self._get(url)
+            
+            params = {"state": state}
+            response = self._get(url, params=params)
             
             if response.status_code == 200:
                 pull_requests = response.json()
                 if not pull_requests:
-                    return f"No pull requests found for repository {repo_full_name}"
+                    return f"No pull requests found for repository {repo_full_name} with state '{state}'"
                 
-                result = f"Pull requests for {repo_full_name}:\n\n"
+                result = f"Pull requests for {repo_full_name} (State: {state}):\n\n"
                 for pr in pull_requests:
                     pr_title = pr.get("title", "No Title")
                     pr_number = pr.get("number", "Unknown")
