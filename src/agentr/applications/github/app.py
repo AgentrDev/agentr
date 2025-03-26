@@ -51,6 +51,42 @@ class GithubApp(APIApplication):
             raise e
        
 
-    
+    def list_commits(self, repo_full_name: str) -> str:
+        """List recent commits for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            
+        Returns:
+            A formatted list of recent commits
+        """
+        try:
+            # Clean the repo_full_name by removing any whitespace or newlines
+            repo_full_name = repo_full_name.strip()
+            
+            url = f"https://api.github.com/repos/{repo_full_name}/commits"
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                commits = response.json()
+                if not commits:
+                    return f"No commits found for repository {repo_full_name}"
+                
+                result = f"Recent commits for {repo_full_name}:\n\n"
+                for commit in commits[:12]:  # Limit to 12 commits 
+                    sha = commit.get("sha", "")[:7]
+                    message = commit.get("commit", {}).get("message", "").split('\n')[0]
+                    author = commit.get("commit", {}).get("author", {}).get("name", "Unknown")
+                    
+                    result += f"- {sha}: {message} (by {author})\n"
+                
+                return result
+            elif response.status_code == 404:
+                return f"Repository {repo_full_name} not found"
+            else:
+                return f"Error retrieving commits: {response.status_code} - {response.text}"
+        except Exception as e:
+            return f"Error retrieving commits: {str(e)}"
+
     def list_tools(self):
-        return [self.star_repository]
+        return [self.star_repository, self.list_commits]
