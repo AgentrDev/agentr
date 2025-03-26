@@ -5,8 +5,8 @@ import base64
 from email.message import EmailMessage
 
 class GmailApp(APIApplication):
-    def __init__(self, user_id, integration: Integration) -> None:
-        super().__init__(name="gmail", user_id=user_id, integration=integration)
+    def __init__(self, integration: Integration) -> None:
+        super().__init__(name="gmail", integration=integration)
 
     def _get_headers(self):
         credentials = self.integration.get_credentials()

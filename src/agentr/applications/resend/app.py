@@ -2,8 +2,16 @@ from agentr.application import APIApplication
 from agentr.integration import Integration
 
 class ResendApp(APIApplication):
-    def __init__(self, user_id, integration: Integration) -> None:
-        super().__init__(name="resend", user_id=user_id, integration=integration)
+    def __init__(self, integration: Integration) -> None:
+        super().__init__(name="resend", integration=integration)
+
+    def _get_headers(self):
+        credentials = self.integration.get_credentials()
+        if not credentials:
+            raise ValueError("No credentials found")
+        return {
+            "Authorization": f"Bearer {credentials['api_key']}",
+        }
 
     def send_email(self, to: str, subject: str, content: str) -> str:
         """Send an email using the Resend API
@@ -16,9 +24,13 @@ class ResendApp(APIApplication):
         Returns:
             A message indicating that the email was sent successfully
         """
+        credentials = self.integration.get_credentials()
+        if not credentials:
+            raise ValueError("No credentials found")
+        from_email = credentials.get("from_email", "Manoj <manoj@agentr.dev>")
         url = "https://api.resend.com/emails"
         body = {
-            "from": "Manoj <manoj@agentr.dev>",
+            "from": from_email,
             "to": [to],
             "subject": subject,
             "text": content

@@ -4,8 +4,8 @@ from loguru import logger
 from datetime import datetime, timedelta
 
 class GoogleCalendarApp(APIApplication):
-    def __init__(self, user_id, integration: Integration) -> None:
-        super().__init__(name="google-calendar", user_id=user_id, integration=integration)
+    def __init__(self, integration: Integration) -> None:
+        super().__init__(name="google-calendar", integration=integration)
 
     def _get_headers(self):
         credentials = self.integration.get_credentials()

@@ -4,8 +4,8 @@ from loguru import logger
 
 
 class GithubApp(APIApplication):
-    def __init__(self, user_id, integration: Integration) -> None:
-        super().__init__(name="github", user_id=user_id, integration=integration)
+    def __init__(self, integration: Integration) -> None:
+        super().__init__(name="github", integration=integration)
 
     def _get_headers(self):
         credentials = self.integration.get_credentials()
