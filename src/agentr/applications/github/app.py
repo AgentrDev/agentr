@@ -356,7 +356,59 @@ class GithubApp(APIApplication):
             logger.error(e)
             return f"Error creating issue: {str(e)}"
 
+    def list_repo_activities(self, repo_full_name: str, direction: str = "desc", per_page: int = 30) -> str:
+        """List activities for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            direction: The direction to sort the results by (asc or desc). Default: desc
+            per_page: The number of results per page (max 100). Default: 30
+            
+        Returns:
+            A formatted list of repository activities
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            url = f"{self.base_api_url}/{repo_full_name}/activity"
+            
+            # Build query parameters
+            params = {
+                "direction": direction,
+                "per_page": per_page
+            }
+            
+            response = self._get(url, params=params)
+            
+            if response.status_code == 200:
+                activities = response.json()
+                if not activities:
+                    return f"No activities found for repository {repo_full_name}"
+                
+                result = f"Repository activities for {repo_full_name}:\n\n"
+                
+                for activity in activities:
+                    # Extract common fields
+                    timestamp = activity.get("timestamp", "Unknown time")
+                    actor_name = "Unknown user"
+                    if "actor" in activity and activity["actor"]:
+                        actor_name = activity["actor"].get("login", "Unknown user")
+                    
+                    # Create a simple description of the activity
+                    result += f"- {actor_name} performed an activity at {timestamp}\n"
+                
+                return result
+            elif response.status_code == 404:
+                return f"Repository {repo_full_name} not found"
+            else:
+                logger.error(response.text)
+                return f"Error retrieving activities: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
+        except Exception as e:
+            logger.error(e)
+            return f"Error retrieving activities: {str(e)}"
+
     def list_tools(self):
         return [self.star_repository, self.list_commits, self.list_branches, 
                 self.list_pull_requests, self.list_issues, self.get_pull_request, 
-                self.create_pull_request, self.create_issue]
+                self.create_pull_request, self.create_issue, self.list_repo_activities]
