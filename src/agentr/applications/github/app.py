@@ -257,5 +257,56 @@ class GithubApp(APIApplication):
             logger.error(e)
             return f"Error retrieving pull request: {str(e)}"
 
+    def create_pull_request(self, repo_full_name: str, title: str, head: str, base: str, body: str = "", 
+                            maintainer_can_modify: bool = True, draft: bool = False) -> str:
+        """Create a new pull request for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            title: The title of the new pull request
+            head: The name of the branch where your changes are implemented
+            base: The name of the branch you want the changes pulled into
+            body: The contents of the pull request
+            maintainer_can_modify: Indicates whether maintainers can modify the pull request
+            draft: Indicates whether the pull request is a draft
+            
+        Returns:
+            A confirmation message with the new pull request details
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            url = f"{self.base_api_url}/{repo_full_name}/pulls"
+            
+            pull_request_data = {
+                "title": title,
+                "head": head,
+                "base": base,
+                "body": body,
+                "maintainer_can_modify": maintainer_can_modify,
+                "draft": draft
+            }
+            
+            response = self._post(url, pull_request_data)
+            
+            if response.status_code in [200, 201]:
+                pr = response.json()
+                pr_number = pr.get("number", "Unknown")
+                pr_url = pr.get("html_url", "")
+                
+                return f"Successfully created pull request #{pr_number}:\n" \
+                       f"Title: {title}\n" \
+                       f"From: {head} → To: {base}\n" \
+                       f"URL: {pr_url}"
+            else:
+                logger.error(response.text)
+                return f"Error creating pull request: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
+        except Exception as e:
+            logger.error(e)
+            return f"Error creating pull request: {str(e)}"
+
     def list_tools(self):
-        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests, self.list_issues, self.get_pull_request]
+        return [self.star_repository, self.list_commits, self.list_branches, 
+                self.list_pull_requests, self.list_issues, self.get_pull_request, 
+                self.create_pull_request]
