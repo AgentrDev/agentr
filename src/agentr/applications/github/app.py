@@ -8,7 +8,12 @@ class GithubApp(APIApplication):
         super().__init__(name="github", integration=integration)
 
     def _get_headers(self):
+        if not self.integration:
+            raise ValueError("Integration not configured")
         credentials = self.integration.get_credentials()
+        if not credentials:
+            logger.warning("No credentials found")
+            return self.integration.authorize()
         if "headers" in credentials:
             return credentials["headers"]
         return {
@@ -27,9 +32,6 @@ class GithubApp(APIApplication):
             
                 A confirmation message
         """
-        if not self.validate():
-            logger.warning("Connection not configured correctly")
-            return self.authorize()
         try:
             url = f"https://api.github.com/user/starred/{repo_full_name}"
             response = self._put(url, data={})

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import os
 from agentr.store import Store
 import httpx
 
@@ -34,17 +35,22 @@ class ApiKeyIntegration(Integration):
     def set_credentials(self, credentials: dict):
         self.store.set(self.name, credentials)
 
+    def authorize(self):
+        return {"text": "Please configure the environment variable {self.name}_API_KEY"}
+
 class AgentRIntegration(Integration):
-    def __init__(self, name: str, api_key: str, **kwargs):
+    def __init__(self, name: str, api_key: str = None, **kwargs):
         super().__init__(name, **kwargs)
-        self.api_key = api_key
-        self.base_url = "https://api.agentr.dev/v1"
+        self.api_key = api_key or os.getenv("AGENTR_API_KEY")
+        if not self.api_key:
+            raise ValueError("api_key is required")
+        self.base_url = "https://api.agentr.dev"
 
     def get_credentials(self):
-        response = httpx.get(f"{self.base_url}/{self.name}/credentials", headers={"Authorization": f"Bearer {self.api_key}"})
+        response = httpx.get(f"{self.base_url}/integrations/{self.name}/credentials", headers={"Authorization": f"Bearer {self.api_key}"})
         return response.json()
 
     def authorize(self):
-        response = httpx.post(f"{self.base_url}/{self.name}/authorize", headers={"Authorization": f"Bearer {self.api_key}"})
+        response = httpx.post(f"{self.base_url}/integrations/{self.name}/authorize", headers={"Authorization": f"Bearer {self.api_key}"})
         url = response.json()["url"]
-        return url
+        return {"url": url, "text": "Please authorize the application by clicking the link {url}"}

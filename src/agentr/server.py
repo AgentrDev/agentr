@@ -11,7 +11,7 @@ class StoreConfig(BaseModel):
 
 class IntegrationConfig(BaseModel):
     name: str
-    type: Literal["api_key", "agentr", "nango"]
+    type: Literal["api_key", "agentr"]
     credentials: dict | None = None
     store: StoreConfig | None = None
 
@@ -57,7 +57,7 @@ class TestServer(Server):
                 integration.set_credentials(integration_config.credentials)
             return integration
         elif integration_config.type == "agentr":
-            integration = AgentRIntegration(integration_config.name, api_key=integration_config.credentials["api_key"])
+            integration = AgentRIntegration(integration_config.name, api_key=integration_config.credentials.get("api_key") if integration_config.credentials else None)
             return integration
         return None
     
@@ -70,8 +70,29 @@ class TestServer(Server):
             from agentr.applications.tavily.app import TavilyApp
             integration = self._get_integration(app_config.integration)
             return TavilyApp(integration=integration)
-        return None
-
+        elif name == "github":
+            from agentr.applications.github.app import GithubApp
+            integration = self._get_integration(app_config.integration)
+            return GithubApp(integration=integration)
+        elif name == "google-calendar":
+            from agentr.applications.google_calendar.app import GoogleCalendarApp
+            integration = self._get_integration(app_config.integration)
+            return GoogleCalendarApp(integration=integration)
+        elif name == "gmail":
+            from agentr.applications.google_mail.app import GmailApp
+            integration = self._get_integration(app_config.integration)
+            return GmailApp(integration=integration)
+        elif name == "resend":
+            from agentr.applications.resend.app import ResendApp
+            integration = self._get_integration(app_config.integration)
+            return ResendApp(integration=integration)
+        elif name == "reddit":
+            from agentr.applications.reddit.app import RedditApp
+            integration = self._get_integration(app_config.integration)
+            return RedditApp(integration=integration)
+        else:
+            return None
+            
     def _load_apps(self):
         logger.info(f"Loading apps: {self.apps_list}")
         for app_config in self.apps_list:

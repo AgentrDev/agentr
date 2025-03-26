@@ -52,9 +52,6 @@ class APIApplication(Application):
     def validate(self):
         pass
     
-    def authorize(self):
-        pass
-
     @abstractmethod
     def list_tools(self):
         pass
