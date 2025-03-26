@@ -6,6 +6,7 @@ from agentr.exceptions import NotAuthorizedError
 class GithubApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
         super().__init__(name="github", integration=integration)
+        self.base_api_url = "https://api.github.com/repos"
 
     def _get_headers(self):
         if not self.integration:
@@ -61,10 +62,8 @@ class GithubApp(APIApplication):
             A formatted list of recent commits
         """
         try:
-            # Clean the repo_full_name by removing any whitespace or newlines
             repo_full_name = repo_full_name.strip()
-            
-            url = f"https://api.github.com/repos/{repo_full_name}/commits"
+            url = f"{self.base_api_url}/{repo_full_name}/commits"
             response = self._get(url)
             
             if response.status_code == 200:
@@ -84,8 +83,12 @@ class GithubApp(APIApplication):
             elif response.status_code == 404:
                 return f"Repository {repo_full_name} not found"
             else:
+                logger.error(response.text)
                 return f"Error retrieving commits: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
+            logger.error(e)
             return f"Error retrieving commits: {str(e)}"
 
     def list_branches(self, repo_full_name: str) -> str:
@@ -99,8 +102,7 @@ class GithubApp(APIApplication):
         """
         try:
             repo_full_name = repo_full_name.strip()
-            
-            url = f"https://api.github.com/repos/{repo_full_name}/branches"
+            url = f"{self.base_api_url}/{repo_full_name}/branches"
             response = self._get(url)
             
             if response.status_code == 200:
@@ -117,8 +119,12 @@ class GithubApp(APIApplication):
             elif response.status_code == 404:
                 return f"Repository {repo_full_name} not found"
             else:
+                logger.error(response.text)
                 return f"Error retrieving branches: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
+            logger.error(e)
             return f"Error retrieving branches: {str(e)}"
     
     def list_pull_requests(self, repo_full_name: str, state: str = "open") -> str:
@@ -133,9 +139,7 @@ class GithubApp(APIApplication):
         """
         try:
             repo_full_name = repo_full_name.strip()
-            
-            url = f"https://api.github.com/repos/{repo_full_name}/pulls"
-            
+            url = f"{self.base_api_url}/{repo_full_name}/pulls"
             params = {"state": state}
             response = self._get(url, params=params)
             
@@ -157,8 +161,12 @@ class GithubApp(APIApplication):
             elif response.status_code == 404:
                 return f"Repository {repo_full_name} not found"
             else:
+                logger.error(response.text)
                 return f"Error retrieving pull requests: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
+            logger.error(e)
             return f"Error retrieving pull requests: {str(e)}"
 
     def list_issues(self, repo_full_name: str, per_page: int = 30, page: int = 1) -> str:
@@ -174,14 +182,11 @@ class GithubApp(APIApplication):
         """
         try:
             repo_full_name = repo_full_name.strip()
-            
-            url = f"https://api.github.com/repos/{repo_full_name}/issues/events"
-            
+            url = f"{self.base_api_url}/{repo_full_name}/issues/events"
             params = {
                 "per_page": per_page,
                 "page": page
             }
-            
             response = self._get(url, params=params)
             
             if response.status_code == 200:
@@ -202,8 +207,12 @@ class GithubApp(APIApplication):
             elif response.status_code == 404:
                 return f"Repository {repo_full_name} not found"
             else:
+                logger.error(response.text)
                 return f"Error retrieving issues: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
+            logger.error(e)
             return f"Error retrieving issues: {str(e)}"
 
     def get_pull_request(self, repo_full_name: str, pull_number: int) -> str:
@@ -218,8 +227,7 @@ class GithubApp(APIApplication):
         """
         try:
             repo_full_name = repo_full_name.strip()
-            
-            url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
+            url = f"{self.base_api_url}/{repo_full_name}/pulls/{pull_number}"
             response = self._get(url)
             
             if response.status_code == 200:
@@ -241,8 +249,12 @@ class GithubApp(APIApplication):
             elif response.status_code == 404:
                 return f"Pull request #{pull_number} not found in repository {repo_full_name}"
             else:
+                logger.error(response.text)
                 return f"Error retrieving pull request: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
+            logger.error(e)
             return f"Error retrieving pull request: {str(e)}"
 
     def list_tools(self):
