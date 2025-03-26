@@ -1,13 +1,13 @@
 # AgentR
 
-AgentR is a Python framework for building powerful agent applications with integrated third-party services. It provides a clean abstraction for incorporating various API services as "applications" into your agent workflow.
+AgentR is a Python framework for building MCP servers to serve agentic applications and LLM clients. It provides a clean abstraction for incorporating various API services as "applications" into your agent workflow.
 
 ## 🌟 Features
 
-- **Simplified API Integration**: Connect to services like GitHub, Google Calendar, Gmail, Reddit, Tavily, and more with minimal code
-- **Authentication Handling**: Built-in support for API keys and OAuth-based authentication flows
-- **Extensible Architecture**: Easily build and add new app integrations with minimal boilerplate
 - **MCP (Model Context Protocol) Integration**: Seamlessly works with MCP server architecture
+- **Simplified API Integration**: Connect to services like GitHub, Google Calendar, Gmail, Reddit, Tavily, and more with minimal code
+- **Managed Authentication**: Built-in support for API keys and OAuth-based authentication flows
+- **Extensible Architecture**: Easily build and add new app integrations with minimal boilerplate
 - **Credential Management**: Flexible storage options for API credentials with memory and environment-based implementations
 
 ## 🔧 Installation
