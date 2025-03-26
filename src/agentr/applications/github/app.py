@@ -175,10 +175,8 @@ class GithubApp(APIApplication):
         try:
             repo_full_name = repo_full_name.strip()
             
-            # Construct the URL for the issues endpoint
             url = f"https://api.github.com/repos/{repo_full_name}/issues/events"
             
-            # Prepare the query parameters
             params = {
                 "per_page": per_page,
                 "page": page
@@ -208,5 +206,44 @@ class GithubApp(APIApplication):
         except Exception as e:
             return f"Error retrieving issues: {str(e)}"
 
+    def get_pull_request(self, repo_full_name: str, pull_number: int) -> str:
+        """Get a specific pull request for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            pull_number: The number of the pull request to retrieve
+            
+        Returns:
+            A formatted string with pull request details
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            
+            url = f"https://api.github.com/repos/{repo_full_name}/pulls/{pull_number}"
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                pr = response.json()
+                pr_title = pr.get("title", "No Title")
+                pr_number = pr.get("number", "Unknown")
+                pr_state = pr.get("state", "Unknown")
+                pr_user = pr.get("user", {}).get("login", "Unknown")
+                pr_body = pr.get("body", "No description provided.")
+                
+                result = (
+                    f"Pull Request #{pr_number}: {pr_title}\n"
+                    f"Created by: {pr_user}\n"
+                    f"Status: {pr_state}\n"
+                    f"Description: {pr_body}\n"
+                )
+                
+                return result
+            elif response.status_code == 404:
+                return f"Pull request #{pull_number} not found in repository {repo_full_name}"
+            else:
+                return f"Error retrieving pull request: {response.status_code} - {response.text}"
+        except Exception as e:
+            return f"Error retrieving pull request: {str(e)}"
+
     def list_tools(self):
-        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests, self.list_issues]
+        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests, self.list_issues, self.get_pull_request]
