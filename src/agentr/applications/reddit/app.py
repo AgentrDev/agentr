@@ -174,9 +174,263 @@ class RedditApp(APIApplication):
             logger.exception(f"An unexpected error occurred while searching subreddits for '{query}': {e}")
             return f"An unexpected error occurred while trying to search for subreddits."
 
+    def get_post_flairs(self, subreddit: str):
+        """Retrieve the list of available post flairs for a specific subreddit.
+
+        Args:
+            subreddit: The name of the subreddit (e.g., 'python', 'worldnews') without the 'r/'.
+
+        Returns:
+            A list of dictionaries containing flair details, or an error message.
+        """
+        try:
+            url = f"{self.base_api_url}/r/{subreddit}/api/link_flair_v2"
+            headers = self._get_headers()
+            
+            logger.info(f"Fetching post flairs for subreddit: r/{subreddit}")
+            response = httpx.get(url, headers=headers)
+            response.raise_for_status()
+
+            flairs = response.json()
+            if not flairs:
+                return f"No post flairs available for r/{subreddit}."
+
+            return flairs
+
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e}")
+            return str(e)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                logger.error(f"Access denied to r/{subreddit}. It might be private or require specific permissions.")
+                return f"Error: Access denied to r/{subreddit}. It might be private or require specific permissions."
+            elif e.response.status_code == 404:
+                logger.error(f"Subreddit r/{subreddit} not found.")
+                return f"Error: Subreddit r/{subreddit} not found."
+            else:
+                logger.error(f"HTTP error fetching post flairs from r/{subreddit}: {e.response.status_code} - {e.response.text}")
+                return f"Error fetching post flairs: Received status code {e.response.status_code}."
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while fetching post flairs from r/{subreddit}: {e}")
+            return f"An unexpected error occurred while trying to get post flairs from r/{subreddit}."
+            
+    def create_post(self, subreddit: str, title: str, kind: str = "self", text: str = None, url: str = None, flair_id: str = None):
+        """Create a new post in a specified subreddit.
+
+        Args:
+            subreddit: The name of the subreddit (e.g., 'python', 'worldnews') without the 'r/'.
+            title: The title of the post.
+            kind: The type of post; one of 'self' (text post), 'link' (link post or image post).
+            text: The text content of the post; required if kind is 'self'.
+            url: The URL of the link or image; required if kind is 'link' or 'image'.
+            flair_id: The ID of the flair to assign to the post.
+
+        Returns:
+            The response from the Reddit API or an error message.
+        """
+        if kind not in ["self", "link", "image"]:
+            raise ValueError("Invalid post kind. Must be one of 'self', 'link', or 'image'.")
+
+        if kind == "self" and not text:
+            raise ValueError("Text content is required for text posts.")
+        if kind == "link" and not url:
+            raise ValueError("URL is required for link posts.")
+
+        data = {
+            "sr": subreddit,
+            "title": title,
+            "kind": kind,
+            "text": text,
+            "url": url,
+            "flair_id": flair_id,
+        }
+        # Remove keys with None values
+        data = {k: v for k, v in data.items() if v is not None}
+
+        try:
+            url = f"{self.base_api_url}/api/submit"
+            headers = self._get_headers()
+            
+            logger.info(f"Submitting a new post to r/{subreddit}")
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+
+            return response.json()
+
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e}")
+            return str(e)
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                logger.error(f"Access denied to r/{subreddit}. It might be private or require specific permissions.")
+                return f"Error: Access denied to r/{subreddit}. It might be private or require specific permissions."
+            elif e.response.status_code == 404:
+                logger.error(f"Subreddit r/{subreddit} not found.")
+                return f"Error: Subreddit r/{subreddit} not found."
+            else:
+                logger.error(f"HTTP error submitting post to r/{subreddit}: {e.response.status_code} - {e.response.text}")
+                return f"Error submitting post: Received status code {e.response.status_code}."
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while submitting a post to r/{subreddit}: {e}")
+            return f"An unexpected error occurred while trying to submit a post to r/{subreddit}."
+            
+    def get_comment_by_id(self, comment_id: str) -> dict:
+        """
+        Retrieve a specific Reddit comment by its full ID (t1_commentid).
+
+        Args:
+            comment_id: The full unique ID of the comment (e.g., 't1_abcdef').
+
+        Returns:
+            A dictionary containing the comment data, or an error message if retrieval fails.
+        """
+
+        # Define the endpoint URL
+        url = f"https://oauth.reddit.com/api/info.json?id={comment_id}"
+
+        # Get authentication headers from _get_headers()
+        headers = self._get_headers()
+
+        # Make the GET request to the Reddit API
+        try:
+          response = httpx.get(url, headers=headers)
+          response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+          data = response.json()
+          comments = data.get("data", {}).get("children", [])
+          if comments:
+              return comments[0]["data"]
+          else:
+              return {"error": "Comment not found."}
+
+        except httpx.HTTPError as e:
+            return {"error": f"Failed to retrieve comment: {e}"}
+        except httpx.RequestError as e:
+            return {"error": f"Request failed: {e}"}
+        except Exception as e:
+            return {"error": f"An unexpected error occurred: {e}"}
+        
+    def post_comment(self, parent_id: str, text: str) -> dict:
+        """
+        Post a comment to a Reddit post or another comment.
+
+        Args:
+            parent_id: The full ID of the parent comment or post (e.g., 't3_abc123' for a post, 't1_def456' for a comment).
+            text: The text content of the comment.
+
+        Returns:
+            A dictionary containing the response from the Reddit API, or an error message if posting fails.
+        """
+        try:
+            url = f"{self.base_api_url}/api/comment"
+            headers = self._get_headers()
+            data = {
+                "parent": parent_id,
+                "text": text,
+            }
+
+            logger.info(f"Posting comment to {parent_id}")
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+
+            return response.json()
+
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e}")
+            return {"error": str(e)}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                if "SUBREDDIT_RESTRICTED" in e.response.text:
+                    return {"error": "Error: Subreddit is restricted or private."}
+                elif "USER_RESTRICTED" in e.response.text:
+                    return {"error": "Error: User is restricted from commenting in this subreddit."}
+                else:
+                    return {"error": f"Error: Access denied. Received status code 403."}
+            else:
+                logger.error(f"HTTP error posting comment to {parent_id}: {e.response.status_code} - {e.response.text}")
+                return {"error": f"Error posting comment: Received status code {e.response.status_code}."}
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while posting comment to {parent_id}: {e}")
+            return {"error": f"An unexpected error occurred while trying to post a comment."}
+
+    def edit_content(self, content_id: str, text: str) -> dict:
+        """
+        Edit the text content of a Reddit post or comment.
+
+        Args:
+            content_id: The full ID of the content to edit (e.g., 't3_abc123' for a post, 't1_def456' for a comment).
+            text: The new text content.
+
+        Returns:
+            A dictionary containing the response from the Reddit API, or an error message if editing fails.
+        """
+        try:
+            url = f"{self.base_api_url}/api/editusertext"
+            headers = self._get_headers()
+            data = {
+                "thing_id": content_id,
+                "text": text,
+            }
+
+            logger.info(f"Editing content {content_id}")
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+
+            return response.json()
+
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e}")
+            return {"error": str(e)}
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error editing content {content_id}: {e.response.status_code} - {e.response.text}")
+            return {"error": f"Error editing content: Received status code {e.response.status_code}."}
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while editing content {content_id}: {e}")
+            return {"error": f"An unexpected error occurred while trying to edit content."}
+    def delete_content(self, content_id: str) -> dict:
+        """
+        Delete a Reddit post or comment.
+
+        Args:
+            content_id: The full ID of the content to delete (e.g., 't3_abc123' for a post, 't1_def456' for a comment).
+
+        Returns:
+            A dictionary containing the response from the Reddit API, or an error message if deletion fails.
+        """
+        try:
+            url = f"{self.base_api_url}/api/del"
+            headers = self._get_headers()
+            data = {
+                "id": content_id,
+            }
+
+            logger.info(f"Deleting content {content_id}")
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+
+            # Reddit's delete endpoint returns an empty response on success.
+            # We'll just return a success message.
+            return {"message": f"Content {content_id} deleted successfully."}
+
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e}")
+            return {"error": str(e)}
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error deleting content {content_id}: {e.response.status_code} - {e.response.text}")
+            return {"error": f"Error deleting content: Received status code {e.response.status_code}."}
+        except Exception as e:
+            logger.exception(f"An unexpected error occurred while deleting content {content_id}: {e}")
+            return {"error": f"An unexpected error occurred while trying to delete content."}
+
     def list_tools(self):
         # Add the new tool to the list
         return [
             self.get_subreddit_posts, 
-            self.search_subreddits  # <<< Added this line
+            self.search_subreddits,
+            self.get_post_flairs,
+            self.create_post,
+            self.get_comment_by_id,
+            self.post_comment,
+            self.edit_content,
+            self.delete_content
         ]

@@ -52,7 +52,7 @@ class AgentRIntegration(Integration):
             raise ValueError("AgentR API key required - get one at https://agentr.dev")
 
         self.base_url = "https://auth.agentr.dev"
-        self.user_id = "default"
+        self.user_id = "ankit123"
     
     def _create_session_token(self):
         url = "https://auth.agentr.dev/connect/sessions"

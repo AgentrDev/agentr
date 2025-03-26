@@ -3,27 +3,27 @@ from agentr.store import MemoryStore
 
 store = MemoryStore()
 apps_list = [
-    {
-        "name": "tavily",
-        "integration": {
-            "name": "tavily_api_key",
-            "type": "api_key",
-            "store": {
-                "type": "environment",
-            }
-        },        
-    },
-    {
-        "name": "zenquotes",
-        "integration": None
-    },
-    {
-        "name": "github",
-        "integration": {
-            "name": "github",
-            "type": "agentr",
-        }
-    },
+    # {
+    #     "name": "tavily",
+    #     "integration": {
+    #         "name": "tavily_api_key",
+    #         "type": "api_key",
+    #         "store": {
+    #             "type": "environment",
+    #         }
+    #     },        
+    # },
+    # {
+    #     "name": "zenquotes",
+    #     "integration": None
+    # },
+    # {
+    #     "name": "github",
+    #     "integration": {
+    #         "name": "github",
+    #         "type": "agentr",
+    #     }
+    # },
     {
         "name": "reddit",
         "integration": {
