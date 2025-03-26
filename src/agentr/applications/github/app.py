@@ -306,7 +306,57 @@ class GithubApp(APIApplication):
             logger.error(e)
             return f"Error creating pull request: {str(e)}"
 
+    def create_issue(self, repo_full_name: str, title: str, body: str = "", labels = None) -> str:
+        """Create a new issue in a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            title: The title of the issue
+            body: The contents of the issue
+            labels: Labels to associate with this issue. Enter as a comma-separated string
+                   (e.g. "bug,enhancement,documentation"). 
+                   NOTE: Only users with push access can set labels for new issues. 
+                   Labels are silently dropped otherwise.
+            
+        Returns:
+            A confirmation message with the new issue details
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            url = f"{self.base_api_url}/{repo_full_name}/issues"
+            
+            issue_data = {
+                "title": title,
+                "body": body
+            }
+            
+            if labels:
+                if isinstance(labels, str):
+                    labels_list = [label.strip() for label in labels.split(",") if label.strip()]
+                    issue_data["labels"] = labels_list
+                else:
+                    issue_data["labels"] = labels
+            
+            response = self._post(url, issue_data)
+            
+            if response.status_code in [200, 201]:
+                issue = response.json()
+                issue_number = issue.get("number", "Unknown")
+                issue_url = issue.get("html_url", "")
+                
+                return f"Successfully created issue #{issue_number}:\n" \
+                       f"Title: {title}\n" \
+                       f"URL: {issue_url}"
+            else:
+                logger.error(response.text)
+                return f"Error creating issue: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
+        except Exception as e:
+            logger.error(e)
+            return f"Error creating issue: {str(e)}"
+
     def list_tools(self):
         return [self.star_repository, self.list_commits, self.list_branches, 
                 self.list_pull_requests, self.list_issues, self.get_pull_request, 
-                self.create_pull_request]
+                self.create_pull_request, self.create_issue]
