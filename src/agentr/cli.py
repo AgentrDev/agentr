@@ -34,7 +34,14 @@ def run():
 def install(app_name: str):
     """Install an app"""
     import json
-    api_key = typer.prompt("Enter your API key", hide_input=True)
+
+    # Print instructions before asking for API key
+    typer.echo("╭─ Instruction ─────────────────────────────────────────────────────────────────╮")
+    typer.echo("│ API key is required. Visit https://agentr.dev to create an API key.           │")
+    typer.echo("╰───────────────────────────────────────────────────────────────────────────────╯")
+    # Prompt for API key
+    api_key = typer.prompt("Enter your AgentR API key", hide_input=True)
+
     if app_name == "claude":
         typer.echo(f"Installing mcp server for: {app_name}")
         config_path = Path.home() / "Library/Application Support/Claude/claude_desktop_config.json"
@@ -52,7 +59,6 @@ def install(app_name: str):
         typer.echo("App installed successfully")
     else:
         typer.echo(f"App {app_name} not supported")
-
 
 if __name__ == "__main__":
     app()

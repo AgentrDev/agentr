@@ -47,7 +47,10 @@ class AgentRIntegration(Integration):
         super().__init__(name, **kwargs)
         self.api_key = api_key or os.getenv("AGENTR_API_KEY")
         if not self.api_key:
-            raise ValueError("api_key is required")
+            logger.error("API key for AgentR is missing. Please visit https://agentr.dev to create an API key, then set it as AGENTR_API_KEY environment variable.")
+            # raise ValueError("api_key is required")
+            exit(1)
+
         self.base_url = "https://auth.agentr.dev"
         self.user_id = "default"
     
