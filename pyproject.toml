@@ -1,7 +1,7 @@
 [project]
 name = "agentr"
-version = "0.1.5"
-description = "AgentR is a Python framework for building MCP servers to serve agentic applications and LLM clients"
+version = "0.1.6"
+description = "A python framework to build MCP servers"
 readme = "README.md"
 authors = [
     { name = "Manoj Bajaj", email = "manojbajaj95@gmail.com" }
