@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import os
+import sys
 
 from loguru import logger
 from agentr.store import Store
@@ -48,8 +49,7 @@ class AgentRIntegration(Integration):
         self.api_key = api_key or os.getenv("AGENTR_API_KEY")
         if not self.api_key:
             logger.error("API key for AgentR is missing. Please visit https://agentr.dev to create an API key, then set it as AGENTR_API_KEY environment variable.")
-            # raise ValueError("api_key is required")
-            exit(1)
+            raise ValueError("AgentR API key required - get one at https://agentr.dev")
 
         self.base_url = "https://auth.agentr.dev"
         self.user_id = "default"
