@@ -37,7 +37,7 @@ def install(app_name: str):
     api_key = typer.prompt("Enter your API key", hide_input=True)
     if app_name == "claude":
         typer.echo(f"Installing mcp server for: {app_name}")
-        config_path = '~/Library/Application Support/Claude/claude_desktop_config.json'
+        config_path = Path.home() / "Library/Application Support/Claude/claude_desktop_config.json"
         with open(config_path, 'r') as f:
             config = json.load(f)
         config['mcpServers']['agentr-r'] = {
