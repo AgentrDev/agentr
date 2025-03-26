@@ -31,7 +31,7 @@ Set it as an environment variable or include it directly in your code:
 export AGENTR_API_KEY="your_api_key_here"
 ```
 
-### 2. Create a new a basic server
+### 2. Create a basic server
 
 ```bash
 from agentr.server import TestServer
@@ -81,6 +81,8 @@ AgentR comes with several pre-built applications:
 | Resend | Send emails via Resend API | API Key |
 | Tavily | Web search capabilities | API Key |
 | ZenQuotes | Get inspirational quotes | None |
+
+> **Note**: More applications are coming soon! Stay tuned for updates to our application catalog.
 
 ## 🔐 Integration Types
 AgentR supports two primary integration types:
