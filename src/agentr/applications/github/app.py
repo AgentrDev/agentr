@@ -120,6 +120,43 @@ class GithubApp(APIApplication):
                 return f"Error retrieving branches: {response.status_code} - {response.text}"
         except Exception as e:
             return f"Error retrieving branches: {str(e)}"
+    
+    def list_pull_requests(self, repo_full_name: str) -> str:
+        """List pull requests for a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            
+        Returns:
+            A formatted list of pull requests
+        """
+        try:
+            repo_full_name = repo_full_name.strip()
+            
+            url = f"https://api.github.com/repos/{repo_full_name}/pulls"
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                pull_requests = response.json()
+                if not pull_requests:
+                    return f"No pull requests found for repository {repo_full_name}"
+                
+                result = f"Pull requests for {repo_full_name}:\n\n"
+                for pr in pull_requests:
+                    pr_title = pr.get("title", "No Title")
+                    pr_number = pr.get("number", "Unknown")
+                    pr_state = pr.get("state", "Unknown")
+                    pr_user = pr.get("user", {}).get("login", "Unknown")
+                    
+                    result += f"- PR #{pr_number}: {pr_title} (by {pr_user}, Status: {pr_state})\n"
+                
+                return result
+            elif response.status_code == 404:
+                return f"Repository {repo_full_name} not found"
+            else:
+                return f"Error retrieving pull requests: {response.status_code} - {response.text}"
+        except Exception as e:
+            return f"Error retrieving pull requests: {str(e)}"
 
     def list_tools(self):
-        return [self.star_repository, self.list_commits, self.list_branches]
+        return [self.star_repository, self.list_commits, self.list_branches, self.list_pull_requests]
