@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
 import os
+
+from loguru import logger
 from agentr.store import Store
 import httpx
 
@@ -40,52 +42,54 @@ class ApiKeyIntegration(Integration):
 
 
 
-class NangoIntegration(Integration):
-    def __init__(self, user_id, integration_id):
-        self.integration_id = integration_id
-        self.user_id = user_id
-        self.nango_secret_key = os.getenv("NANGO_SECRET_KEY")
-
-    def _create_session_token(self):
-        url = "https://api.nango.dev/connect/sessions"
-        body = {
-            "end_user": {
-                "id": self.user_id,
-            },
-            "allowed_integrations": [self.integration_id]
-        }
-        response = httpx.post(url, headers={"Authorization": f"Bearer {self.nango_secret_key}"}, json=body)
-        data = response.json()
-        return data["data"]["token"]
-    
-    def get_authorize_url(self):
-        session_token = self._create_session_token()
-        return f"https://api.nango.dev/oauth/connect/{self.integration_id}?connect_session_token={session_token}"
-
-    def get_connection_by_owner(self, user_id):
-        url = f"https://api.nango.dev/connection?endUserId={user_id}"
-        response = httpx.get(url, headers={"Authorization": f"Bearer {self.nango_secret_key}"})
-        if response.status_code == 200:
-            connections = response.json()["connections"]
-            for connection in connections:
-                if connection["provider_config_key"] == self.integration_id:
-                    return connection["connection_id"]
-        return None
-
 class AgentRIntegration(Integration):
     def __init__(self, name: str, api_key: str = None, **kwargs):
         super().__init__(name, **kwargs)
         self.api_key = api_key or os.getenv("AGENTR_API_KEY")
         if not self.api_key:
             raise ValueError("api_key is required")
-        self.base_url = "https://api.agentr.dev"
+        self.base_url = "https://auth.agentr.dev"
         self.user_id = "default"
+    
+    def _create_session_token(self):
+        url = "https://auth.agentr.dev/connect/sessions"
+        body = {
+            "end_user": {
+                "id": self.user_id,
+            },
+            "allowed_integrations": [self.name]
+        }
+        response = httpx.post(url, headers={"Authorization": f"Bearer {self.api_key}"}, json=body)
+        data = response.json()
+        print(data)
+        return data["data"]["token"]
+    
+    def _get_authorize_url(self):
+        session_token = self._create_session_token()
+        return f"https://auth.agentr.dev/oauth/connect/{self.name}?connect_session_token={session_token}"
+    
+    def get_connection_by_owner(self):
+        url = f"https://auth.agentr.dev/connection?endUserId={self.user_id}"
+        response = httpx.get(url, headers={"Authorization": f"Bearer {self.api_key}"})
+        if response.status_code == 200:
+            connections = response.json()["connections"]
+            for connection in connections:
+                if connection["provider_config_key"] == self.name:
+                    return connection["connection_id"]
+        return None
+
+    def set_credentials(self, credentials: dict):
+        raise NotImplementedError("AgentR Integration does not support setting credentials. Visit the authorize url to set credentials.")
 
     def get_credentials(self):
-        response = httpx.get(f"{self.base_url}/integrations/{self.name}/credentials", headers={"Authorization": f"Bearer {self.api_key}"})
-        return response.json()
+        connection_id = self.get_connection_by_owner()
+        logger.info(f"Connection ID: {connection_id}")
+        if connection_id:
+            response = httpx.get(f"{self.base_url}/connection/{connection_id}?provider_config_key={self.name}", headers={"Authorization": f"Bearer {self.api_key}"})
+            data = response.json()
+            return data.get("credentials")
+        return None
 
     def authorize(self):
-        response = httpx.post(f"{self.base_url}/integrations/{self.name}/authorize", headers={"Authorization": f"Bearer {self.api_key}"})
-        url = response.json()["url"]
-        return {"url": url, "text": "Please authorize the application by clicking the link {url}"}
+        url = self._get_authorize_url()
+        return f"Please authorize the application by clicking the link {url}"

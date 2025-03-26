@@ -1,7 +1,7 @@
 from agentr.integration import Integration
 from agentr.application import APIApplication
 from loguru import logger
-
+from agentr.exceptions import NotAuthorizedError
 
 class GithubApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
@@ -13,7 +13,8 @@ class GithubApp(APIApplication):
         credentials = self.integration.get_credentials()
         if not credentials:
             logger.warning("No credentials found")
-            return self.integration.authorize()
+            action = self.integration.authorize()
+            raise NotAuthorizedError(action)
         if "headers" in credentials:
             return credentials["headers"]
         return {
@@ -43,9 +44,12 @@ class GithubApp(APIApplication):
             else:
                 logger.error(response.text)
                 return f"Error starring repository: {response.text}"
+        except NotAuthorizedError as e:
+            return e.message
         except Exception as e:
             logger.error(e)
-            return f"Error starring repository: {e}"
+            raise e
+       
 
     
     def list_tools(self):
