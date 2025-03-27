@@ -279,8 +279,133 @@ class GmailApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error listing drafts: {type(e).__name__} - {str(e)}")
             return f"Error listing drafts: {type(e).__name__} - {str(e)}"
+            
+    def get_message(self, message_id: str) -> str:
+        """Get a specific email message by ID
+        
+        Args:
+            message_id: The ID of the message to retrieve
+            
+        Returns:
+            The message information or an error message
+        """
+        try:
+            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+            
+            logger.info(f"Retrieving message with ID: {message_id}")
+            
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                message_data = response.json()
+                
+                # Extract basic message metadata
+                headers = {}
+                
+                # Extract headers if they exist
+                for header in message_data.get("payload", {}).get("headers", []):
+                    name = header.get("name", "")
+                    value = header.get("value", "")
+                    headers[name] = value
+                
+                from_addr = headers.get("From", "Unknown sender")
+                to = headers.get("To", "Unknown recipient")
+                subject = headers.get("Subject", "No subject")
+                date = headers.get("Date", "Unknown date")
+                
+                # Format the result
+                result = (
+                    f"Message ID: {message_id}\n"
+                    f"From: {from_addr}\n"
+                    f"To: {to}\n"
+                    f"Date: {date}\n"
+                    f"Subject: {subject}\n\n"
+                )
+                
+                # Include snippet as preview of message content
+                if "snippet" in message_data:
+                    result += f"Preview: {message_data['snippet']}\n"
+                
+                return result
+            else:
+                logger.error(f"Gmail API Error: {response.status_code} - {response.text}")
+                return f"Error retrieving message: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Gmail authorization required: {e.message}")
+            return e.message
+        except KeyError as key_error:
+            logger.error(f"Missing key error: {str(key_error)}")
+            return f"Configuration error: Missing required key - {str(key_error)}"
+        except Exception as e:
+            logger.exception(f"Error retrieving message: {type(e).__name__} - {str(e)}")
+            return f"Error retrieving message: {type(e).__name__} - {str(e)}"
+            
+    def list_messages(self, max_results: int = 20, q: str = None, include_spam_trash: bool = False) -> str:
+        """List messages in the user's mailbox
+        
+        Args:
+            max_results: Maximum number of messages to return (max 500, default 20)
+            q: Search query to filter messages (same format as Gmail search)
+            include_spam_trash: Include messages from spam and trash folders
+            
+        Returns:
+            A formatted list of messages or an error message
+        """
+        try:
+            url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+            
+            # Build query parameters
+            params = {
+                "maxResults": max_results
+            }
+            
+            if q:
+                params["q"] = q
+            
+            if include_spam_trash:
+                params["includeSpamTrash"] = "true"
+            
+            logger.info(f"Retrieving messages list with params: {params}")
+            
+            response = self._get(url, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                messages = data.get("messages", [])
+                result_size = data.get("resultSizeEstimate", 0)
+                
+                if not messages:
+                    return "No messages found matching the criteria."
+                
+                result = f"Found {len(messages)} messages (estimated total: {result_size}):\n\n"
+                
+                # Just list message IDs without fetching additional details
+                for i, msg in enumerate(messages, 1):
+                    message_id = msg.get("id", "Unknown ID")
+                    thread_id = msg.get("threadId", "Unknown Thread")
+                    result += f"{i}. Message ID: {message_id} (Thread: {thread_id})\n"
+                
+                # Add a note about how to get message details
+                result += "\nUse get_message(message_id) to view the contents of a specific message."
+                
+                if "nextPageToken" in data:
+                    result += "\nMore messages available. Use page token to see more."
+                
+                return result
+            else:
+                logger.error(f"Gmail API Error: {response.status_code} - {response.text}")
+                return f"Error listing messages: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Gmail authorization required: {e.message}")
+            return e.message
+        except KeyError as key_error:
+            logger.error(f"Missing key error: {str(key_error)}")
+            return f"Configuration error: Missing required key - {str(key_error)}"
+        except Exception as e:
+            logger.exception(f"Error listing messages: {type(e).__name__} - {str(e)}")
+            return f"Error listing messages: {type(e).__name__} - {str(e)}"
 
     def list_tools(self):
-        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, self.list_drafts]
+        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, self.list_drafts, self.get_message, self.list_messages]
 
     
