@@ -3,6 +3,7 @@ from agentr.integration import Integration
 from agentr.exceptions import NotAuthorizedError
 from loguru import logger
 from datetime import datetime, timedelta
+from urllib.parse import urlencode
 
 class GoogleCalendarApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
@@ -351,7 +352,80 @@ class GoogleCalendarApp(APIApplication):
             return e.message
         except Exception as e:
             logger.exception(f"Error retrieving events: {type(e).__name__} - {str(e)}")
-            return f"Error retrieving events: {type(e).__name__} - {str(e)}"     
+            return f"Error retrieving events: {type(e).__name__} - {str(e)}" 
+    
+    def quick_add_event(self, text: str, send_updates: str = "none") -> str:
+        """Create a calendar event using natural language description
+        
+        This method allows you to quickly create an event using a simple text string,
+        similar to how you would add events in the Google Calendar UI.
+        
+        Args:
+            text: Text describing the event (e.g., "Meeting with John at Coffee Shop tomorrow 3pm-4pm")
+            send_updates: Who should receive notifications - "all", "externalOnly", or "none" (default)
+            
+        Returns:
+            A confirmation message with the created event details or an error message
+        """
+        try:
+            # Create the URL with query parameters directly in the URL
+            base_url = f"{self.base_api_url}/events/quickAdd"
+            
+            # Add the query parameters to the URL
+            query_params = urlencode({"text": text, "sendUpdates": send_updates})
+            url = f"{base_url}?{query_params}"
+            
+            logger.info(f"Creating event via quickAdd: '{text}'")
+            
+            # Pass None as the data parameter since all info is in the URL
+            response = self._post(url, None)
+            
+            if response.status_code in [200, 201]:
+                event = response.json()
+                
+                # Extract event details
+                event_id = event.get("id", "Unknown")
+                summary = event.get("summary", "Untitled event")
+                
+                # Format dates
+                start = event.get("start", {})
+                end = event.get("end", {})
+                
+                start_time = start.get("dateTime", start.get("date", "Unknown"))
+                end_time = end.get("dateTime", end.get("date", "Unknown"))
+                
+                # Format datetimes using the helper function
+                start_formatted = self._format_datetime(start_time)
+                end_formatted = self._format_datetime(end_time)
+                
+                # Get location if available
+                location = event.get("location", "No location specified")
+                
+                # Format the confirmation message
+                result = f"Successfully created event!\n\n"
+                result += f"Summary: {summary}\n"
+                result += f"When: {start_formatted}"
+                
+                # Only add end time if it's different from start (for all-day events they might be the same)
+                if start_formatted != end_formatted:
+                    result += f" to {end_formatted}"
+                    
+                result += f"\nWhere: {location}\n"
+                result += f"Event ID: {event_id}\n"
+                
+                # Add a note about viewing the event
+                result += f"\nUse get_event('{event_id}') to see full details."
+                
+                return result
+            else:
+                logger.error(f"Google Calendar API Error: {response.status_code} - {response.text}")
+                return f"Error creating event: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Google Calendar authorization required: {e.message}")
+            return e.message
+        except Exception as e:
+            logger.exception(f"Error creating event: {type(e).__name__} - {str(e)}")
+            return f"Error creating event: {type(e).__name__} - {str(e)}"
     
     def list_tools(self):
-        return [self.get_event, self.get_today_events, self.list_events]        
+        return [self.get_event, self.get_today_events, self.list_events, self.quick_add_event]        
