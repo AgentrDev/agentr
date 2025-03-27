@@ -233,8 +233,8 @@ class RedditApp(APIApplication):
 
         if kind == "self" and not text:
             raise ValueError("Text content is required for text posts.")
-        if kind == "link" and not url:
-            raise ValueError("URL is required for link posts.")
+        if kind in ["link", "image"] and not url:
+            raise ValueError("URL is required for link and image posts.")
 
         data = {
             "sr": subreddit,
