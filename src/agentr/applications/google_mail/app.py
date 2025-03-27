@@ -404,8 +404,121 @@ class GmailApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error listing messages: {type(e).__name__} - {str(e)}")
             return f"Error listing messages: {type(e).__name__} - {str(e)}"
+            
+   
+
+    def list_labels(self) -> str:
+        """List all labels in the user's Gmail account
+        
+        Returns:
+            A formatted list of labels or an error message
+        """
+        try:
+            url = "https://gmail.googleapis.com/gmail/v1/users/me/labels"
+            
+            logger.info("Retrieving Gmail labels")
+            
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                data = response.json()
+                labels = data.get("labels", [])
+                
+                if not labels:
+                    return "No labels found in your Gmail account."
+                
+                # Sort labels by type (system first, then user) and then by name
+                system_labels = []
+                user_labels = []
+                
+                for label in labels:
+                    label_id = label.get("id", "Unknown ID")
+                    label_name = label.get("name", "Unknown Name")
+                    label_type = label.get("type", "Unknown Type")
+                    
+                    if label_type == "system":
+                        system_labels.append((label_id, label_name))
+                    else:
+                        user_labels.append((label_id, label_name))
+                
+                # Sort by name within each category
+                system_labels.sort(key=lambda x: x[1])
+                user_labels.sort(key=lambda x: x[1])
+                
+                result = f"Found {len(labels)} Gmail labels:\n\n"
+                
+                # System labels
+                if system_labels:
+                    result += "System Labels:\n"
+                    for label_id, label_name in system_labels:
+                        result += f"- {label_name} (ID: {label_id})\n"
+                    result += "\n"
+                
+                # User labels
+                if user_labels:
+                    result += "User Labels:\n"
+                    for label_id, label_name in user_labels:
+                        result += f"- {label_name} (ID: {label_id})\n"
+                
+                # Add note about using labels
+                result += "\nThese label IDs can be used with list_messages to filter emails by label."
+                
+                return result
+            else:
+                logger.error(f"Gmail API Error: {response.status_code} - {response.text}")
+                return f"Error listing labels: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Gmail authorization required: {e.message}")
+            return e.message
+        except Exception as e:
+            logger.exception(f"Error listing labels: {type(e).__name__} - {str(e)}")
+            return f"Error listing labels: {type(e).__name__} - {str(e)}"
+
+    def create_label(self, name: str) -> str:
+        """Create a new Gmail label
+        
+        Args:
+            name: The display name of the label to create
+            
+        Returns:
+            A confirmation message with the new label details
+        """
+        try:
+            url = "https://gmail.googleapis.com/gmail/v1/users/me/labels"
+            
+            # Create the label data with just the essential fields
+            label_data = {
+                "name": name,
+                "labelListVisibility": "labelShow",  # Show in label list
+                "messageListVisibility": "show"      # Show in message list
+            }
+            
+            logger.info(f"Creating new Gmail label: {name}")
+            
+            response = self._post(url, label_data)
+            
+            if response.status_code in [200, 201]:
+                new_label = response.json()
+                label_id = new_label.get("id", "Unknown")
+                label_name = new_label.get("name", name)
+                
+                result = f"Successfully created new label:\n"
+                result += f"- Name: {label_name}\n"
+                result += f"- ID: {label_id}\n"
+                
+                return result
+            else:
+                logger.error(f"Gmail API Error: {response.status_code} - {response.text}")
+                return f"Error creating label: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Gmail authorization required: {e.message}")
+            return e.message
+        except Exception as e:
+            logger.exception(f"Error creating label: {type(e).__name__} - {str(e)}")
+            return f"Error creating label: {type(e).__name__} - {str(e)}"
 
     def list_tools(self):
-        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, self.list_drafts, self.get_message, self.list_messages]
-
+        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, 
+                self.list_drafts, self.get_message, self.list_messages, 
+                self.list_labels, self.create_label]
     
