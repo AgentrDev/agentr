@@ -187,7 +187,7 @@ class GoogleCalendarApp(APIApplication):
 
     def list_events(self, max_results: int = 10, time_min: str = None, time_max: str = None, 
                    q: str = None, order_by: str = "startTime", single_events: bool = True,
-                   time_zone: str = None, event_types: list = None, page_token: str = None) -> str:
+                   time_zone: str = None, page_token: str = None) -> str:
         """List events from your Google Calendar with various filtering options
         
         Args:
@@ -198,7 +198,6 @@ class GoogleCalendarApp(APIApplication):
             order_by: How to order results - 'startTime' (default) or 'updated'
             single_events: Whether to expand recurring events (default: True)
             time_zone: Time zone used in the response (default is calendar's time zone)
-            event_types: List of event types to include (e.g. ["default", "outOfOffice"])
             page_token: Token for retrieving a specific page of results
             
         Returns:
@@ -234,10 +233,6 @@ class GoogleCalendarApp(APIApplication):
                 
             if page_token:
                 params["pageToken"] = page_token
-                
-            # Add event types if specified
-            if event_types and isinstance(event_types, list):
-                params["eventTypes"] = ",".join(event_types)
             
             logger.info(f"Retrieving calendar events with params: {params}")
             
