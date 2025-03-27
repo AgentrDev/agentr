@@ -8,6 +8,7 @@ from email.message import EmailMessage
 class GmailApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
         super().__init__(name="gmail", integration=integration)
+        self.base_api_url = "https://gmail.googleapis.com/gmail/v1/users/me"
 
     def _get_headers(self):
         if not self.integration:
@@ -37,7 +38,7 @@ class GmailApp(APIApplication):
             A confirmation message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+            url = f"{self.base_api_url}/messages/send"
             
             # Create email in base64 encoded format
             raw_message = self._create_message(to, subject, body)
@@ -96,7 +97,7 @@ class GmailApp(APIApplication):
             A confirmation message with the draft ID
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+            url = f"{self.base_api_url}/drafts"
             
             raw_message = self._create_message(to, subject, body)
             
@@ -137,7 +138,7 @@ class GmailApp(APIApplication):
             A confirmation message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts/send"
+            url = f"{self.base_api_url}/drafts/send"
             
             draft_data = {
                 "id": draft_id
@@ -174,7 +175,7 @@ class GmailApp(APIApplication):
             The draft information or an error message
         """
         try:
-            url = f"https://gmail.googleapis.com/gmail/v1/users/me/drafts/{draft_id}"
+            url = f"{self.base_api_url}/drafts/{draft_id}"
             
             # Add format parameter as query param
             params = {"format": format}
@@ -231,7 +232,7 @@ class GmailApp(APIApplication):
             A formatted list of drafts or an error message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/drafts"
+            url = f"{self.base_api_url}/drafts"
             
             # Build query parameters
             params = {
@@ -290,7 +291,7 @@ class GmailApp(APIApplication):
             The message information or an error message
         """
         try:
-            url = f"https://gmail.googleapis.com/gmail/v1/users/me/messages/{message_id}"
+            url = f"{self.base_api_url}/messages/{message_id}"
             
             logger.info(f"Retrieving message with ID: {message_id}")
             
@@ -352,7 +353,7 @@ class GmailApp(APIApplication):
             A formatted list of messages or an error message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/messages"
+            url = f"{self.base_api_url}/messages"
             
             # Build query parameters
             params = {
@@ -414,7 +415,7 @@ class GmailApp(APIApplication):
             A formatted list of labels or an error message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/labels"
+            url = f"{self.base_api_url}/labels"
             
             logger.info("Retrieving Gmail labels")
             
@@ -484,7 +485,7 @@ class GmailApp(APIApplication):
             A confirmation message with the new label details
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/labels"
+            url = f"{self.base_api_url}/labels"
             
             # Create the label data with just the essential fields
             label_data = {
@@ -526,7 +527,7 @@ class GmailApp(APIApplication):
             A formatted string containing the user's profile information or an error message
         """
         try:
-            url = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+            url = f"{self.base_api_url}/profile"
             
             logger.info("Retrieving Gmail user profile")
             
