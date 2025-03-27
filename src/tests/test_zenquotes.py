@@ -1,6 +1,8 @@
 from loguru import logger
 from agentr.server import LocalServer
+import pytest
 
+@pytest.mark.asyncio
 async def test_zenquotes():
     apps_list = [
         {

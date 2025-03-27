@@ -2,7 +2,7 @@ import pytest
 from agentr.server import AgentRServer
 from loguru import logger
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 @pytest.mark.skip(reason="This test is not completed yet")
 async def test_load_agentr_server():
     # Test with invalid API key

@@ -71,7 +71,7 @@ class LocalServer(Server):
 
 class AgentRServer(Server):
     """
-    Test server for development purposes
+    AgentR server. Connects to the AgentR API to get the apps and tools. Only supports agentr integrations.
     """
     def __init__(self, name: str, description: str, api_key: str | None = None, **kwargs):
         super().__init__(name, description=description, **kwargs)
@@ -83,10 +83,11 @@ class AgentRServer(Server):
     
     def _load_app(self, app_config: AppConfig):
         name = app_config.name
-        integration = app_config.integration
-        if not integration:
-            raise ValueError(f"Integration for app {name} not found")
-        integration = AgentRIntegration(name, api_key=self.api_key)
+        if app_config.integration:
+            integration_name = app_config.integration.name
+            integration = AgentRIntegration(integration_name, api_key=self.api_key)
+        else:
+            integration = None
         app = app_from_name(name)(integration=integration)
         return app
         
