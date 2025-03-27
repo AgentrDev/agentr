@@ -25,22 +25,63 @@ class GoogleCalendarApp(APIApplication):
             "Accept": "application/json"
         }
     
-    def get_today_events(self) -> str:
-        """Get events from your Google Calendar for today
+    def _format_datetime(self, dt_string: str) -> str:
+        """Format a datetime string from ISO format to a human-readable format.
+        
+        Args:
+            dt_string: A datetime string in ISO format (e.g., "2023-06-01T10:00:00Z")
         
         Returns:
-            A formatted list of today's events or an error message
+            A formatted datetime string (e.g., "2023-06-01 10:00 AM") or the original string with
+            "(All day)" appended if it's just a date
+        """
+        if not dt_string or dt_string == "Unknown":
+            return "Unknown"
+            
+        # Check if it's just a date (all-day event) or a datetime
+        if "T" in dt_string:
+            # It's a datetime - parse and format it
+            try:
+                # Handle Z (UTC) suffix by replacing with +00:00 timezone
+                if dt_string.endswith("Z"):
+                    dt_string = dt_string.replace("Z", "+00:00")
+                    
+                # Parse the ISO datetime string
+                dt = datetime.fromisoformat(dt_string)
+                
+                # Format to a more readable form
+                return dt.strftime("%Y-%m-%d %I:%M %p")
+            except ValueError:
+                # In case of parsing error, return the original
+                logger.warning(f"Could not parse datetime string: {dt_string}")
+                return dt_string
+        else:
+            # It's just a date (all-day event)
+            return f"{dt_string} (All day)"
+    
+    def get_today_events(self, days: int = 1, max_results: int = None, time_zone: str = None) -> str:
+        """Get events from your Google Calendar for today or a specified number of days
+        
+        Args:
+            days: Number of days to retrieve events for (default: 1, which is just today)
+            max_results: Maximum number of events to return (optional)
+            time_zone: Time zone used in the response (optional, default is calendar's time zone)
+            
+        Returns:
+            A formatted list of events or an error message
         """
         try:
             # Get today's date in ISO format
             today = datetime.now().date()
-            tomorrow = today + timedelta(days=1)
+            end_date = today + timedelta(days=days)
             
             # Format dates for API
             time_min = f"{today.isoformat()}T00:00:00Z"
-            time_max = f"{tomorrow.isoformat()}T00:00:00Z"
+            time_max = f"{end_date.isoformat()}T00:00:00Z"
             
             url = f"{self.base_api_url}/events"
+            
+            # Build query parameters
             params = {
                 "timeMin": time_min,
                 "timeMax": time_max,
@@ -48,25 +89,51 @@ class GoogleCalendarApp(APIApplication):
                 "orderBy": "startTime"
             }
             
-            logger.info(f"Retrieving calendar events for today ({today.isoformat()})")
+            if max_results is not None:
+                params["maxResults"] = max_results
+                
+            if time_zone:
+                params["timeZone"] = time_zone
+            
+            date_range = "today" if days == 1 else f"the next {days} days"
+            logger.info(f"Retrieving calendar events for {date_range}")
             
             response = self._get(url, params=params)
             
             if response.status_code == 200:
                 events = response.json().get("items", [])
                 if not events:
-                    return "No events scheduled for today."
+                    return f"No events scheduled for {date_range}."
                 
-                result = "Today's events:\n\n"
+                result = f"Events for {date_range}:\n\n"
                 for event in events:
+                    # Extract event date and time
                     start = event.get("start", {})
-                    start_time = start.get("dateTime", start.get("date", "All day"))
-                    if "T" in start_time:  # Format datetime
-                        start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                        start_time = start_dt.strftime("%I:%M %p")
+                    event_date = start.get("date", start.get("dateTime", "")).split("T")[0] if "T" in start.get("dateTime", "") else start.get("date", "")
                     
+                    # Extract and format time
+                    start_time = start.get("dateTime", start.get("date", "All day"))
+                    
+                    # Format the time display
+                    if "T" in start_time:  # It's a datetime
+                        formatted_time = self._format_datetime(start_time)
+                        # For multi-day view, keep the date; for single day, just show time
+                        if days > 1:
+                            time_display = formatted_time
+                        else:
+                            # Extract just the time part
+                            time_display = formatted_time.split(" ")[1] + " " + formatted_time.split(" ")[2]
+                    else:  # It's an all-day event
+                        if days > 1:
+                            time_display = f"{event_date} (All day)"
+                        else:
+                            time_display = "All day"
+                    
+                    # Get event details
                     summary = event.get("summary", "Untitled event")
-                    result += f"- {start_time}: {summary}\n"
+                    event_id = event.get("id", "No ID")
+                    
+                    result += f"- {time_display}: {summary} (ID: {event_id})\n"
                 
                 return result
             else:
@@ -79,9 +146,6 @@ class GoogleCalendarApp(APIApplication):
             logger.exception(f"Error retrieving calendar events: {type(e).__name__} - {str(e)}")
             return f"Error retrieving calendar events: {type(e).__name__} - {str(e)}"
     
-    def list_tools(self):
-        return [self.get_today_events]
-
     def get_event(self, event_id: str, max_attendees: int = None, time_zone: str = None) -> str:
         """Get a specific event from your Google Calendar by ID
         
@@ -122,14 +186,9 @@ class GoogleCalendarApp(APIApplication):
                 start_time = start.get("dateTime", start.get("date", "Unknown"))
                 end_time = end.get("dateTime", end.get("date", "Unknown"))
                 
-                # Format datetime if it's a datetime (not all-day)
-                if "T" in start_time:
-                    start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                    start_time = start_dt.strftime("%Y-%m-%d %I:%M %p")
-                
-                if "T" in end_time:
-                    end_dt = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
-                    end_time = end_dt.strftime("%Y-%m-%d %I:%M %p")
+                # Format datetimes using the helper function
+                start_formatted = self._format_datetime(start_time)
+                end_formatted = self._format_datetime(end_time)
                 
                 # Get creator and organizer
                 creator = event.get("creator", {}).get("email", "Unknown")
@@ -161,7 +220,7 @@ class GoogleCalendarApp(APIApplication):
                 # Format the response
                 result = f"Event: {summary}\n"
                 result += f"ID: {event_id}\n"
-                result += f"When: {start_time} to {end_time}\n"
+                result += f"When: {start_formatted} to {end_formatted}\n"
                 result += f"Where: {location}\n"
                 result += f"Description: {description}\n"
                 result += f"Creator: {creator}\n"
@@ -181,9 +240,6 @@ class GoogleCalendarApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error retrieving event: {type(e).__name__} - {str(e)}")
             return f"Error retrieving event: {type(e).__name__} - {str(e)}"
-
-    def list_tools(self):
-        return [self.get_event,self.get_today_events]
 
     def list_events(self, max_results: int = 10, time_min: str = None, time_max: str = None, 
                    q: str = None, order_by: str = "startTime", single_events: bool = True,
@@ -259,20 +315,10 @@ class GoogleCalendarApp(APIApplication):
                     
                     # Get event times and format them
                     start = event.get("start", {})
-                    end = event.get("end", {})
-                    
                     start_time = start.get("dateTime", start.get("date", "Unknown"))
-                    end_time = end.get("dateTime", end.get("date", "Unknown"))
                     
-                    # Format datetime if it's a datetime (not all-day)
-                    is_all_day = "date" in start and "dateTime" not in start
-                    
-                    if not is_all_day and "T" in start_time:
-                        start_dt = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
-                        start_formatted = start_dt.strftime("%Y-%m-%d %I:%M %p")
-                    else:
-                        # It's an all-day event
-                        start_formatted = start_time + " (All day)"
+                    # Format the start time using the helper function
+                    start_formatted = self._format_datetime(start_time)
                     
                     # Get location if available
                     location = event.get("location", "No location specified")
@@ -305,7 +351,7 @@ class GoogleCalendarApp(APIApplication):
             return e.message
         except Exception as e:
             logger.exception(f"Error retrieving events: {type(e).__name__} - {str(e)}")
-            return f"Error retrieving events: {type(e).__name__} - {str(e)}"         
-
+            return f"Error retrieving events: {type(e).__name__} - {str(e)}"     
+    
     def list_tools(self):
-        return [self.get_event,self.get_today_events,self.list_events]        
+        return [self.get_event, self.get_today_events, self.list_events]        
