@@ -426,6 +426,122 @@ class GoogleCalendarApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error creating event: {type(e).__name__} - {str(e)}")
             return f"Error creating event: {type(e).__name__} - {str(e)}"
+            
+    def get_event_instances(self, event_id: str, max_results: int = 25, time_min: str = None, 
+                            time_max: str = None, time_zone: str = None, show_deleted: bool = False,
+                            page_token: str = None) -> str:
+        """Get all instances of a recurring event
+        
+        This method retrieves all occurrences of a recurring event within a specified time range.
+        
+        Args:
+            event_id: ID of the recurring event
+            max_results: Maximum number of event instances to return (default: 25, max: 2500)
+            time_min: Lower bound (inclusive) for event's end time (ISO format)
+            time_max: Upper bound (exclusive) for event's start time (ISO format)
+            time_zone: Time zone used in the response (default is calendar's time zone)
+            show_deleted: Whether to include deleted instances (default: False)
+            page_token: Token for retrieving a specific page of results
+            
+        Returns:
+            A formatted list of event instances or an error message
+        """
+        try:
+            url = f"{self.base_api_url}/events/{event_id}/instances"
+            
+            # Build query parameters
+            params = {
+                "maxResults": max_results,
+                "showDeleted": str(show_deleted).lower()
+            }
+            
+            # Add optional parameters if provided
+            if time_min:
+                params["timeMin"] = time_min
+            
+            if time_max:
+                params["timeMax"] = time_max
+            
+            if time_zone:
+                params["timeZone"] = time_zone
+            
+            if page_token:
+                params["pageToken"] = page_token
+            
+            logger.info(f"Retrieving instances of recurring event with ID: {event_id}")
+            
+            response = self._get(url, params=params)
+            
+            if response.status_code == 200:
+                data = response.json()
+                instances = data.get("items", [])
+                
+                if not instances:
+                    return f"No instances found for recurring event with ID: {event_id}"
+                
+                # Extract event summary from the first instance
+                parent_summary = instances[0].get("summary", "Untitled recurring event")
+                
+                result = f"Instances of recurring event: {parent_summary}\n\n"
+                
+                # Process and format each instance
+                for i, instance in enumerate(instances, 1):
+                    # Get instance ID and status
+                    instance_id = instance.get("id", "No ID")
+                    status = instance.get("status", "confirmed")
+                    
+                    # Format status for display
+                    status_display = ""
+                    if status == "cancelled":
+                        status_display = " [CANCELLED]"
+                    elif status == "tentative":
+                        status_display = " [TENTATIVE]"
+                    
+                    # Get instance time
+                    start = instance.get("start", {})
+                    original_start_time = instance.get("originalStartTime", {})
+                    
+                    # Determine if this is a modified instance
+                    is_modified = original_start_time and "dateTime" in original_start_time
+                    modified_indicator = " [MODIFIED]" if is_modified else ""
+                    
+                    # Get the time information
+                    start_time = start.get("dateTime", start.get("date", "Unknown"))
+                    
+                    # Format the time using the helper function
+                    formatted_time = self._format_datetime(start_time)
+                    
+                    # Format the instance information
+                    result += f"{i}. {formatted_time}{status_display}{modified_indicator}\n"
+                    result += f"   Instance ID: {instance_id}\n"
+                    
+                    # Show original start time if modified
+                    if is_modified:
+                        orig_time = original_start_time.get("dateTime", original_start_time.get("date", "Unknown"))
+                        orig_formatted = self._format_datetime(orig_time)
+                        result += f"   Original time: {orig_formatted}\n"
+                    
+                    # Add a separator between instances
+                    if i < len(instances):
+                        result += "\n"
+                
+                # Add pagination info if available
+                if "nextPageToken" in data:
+                    next_token = data.get("nextPageToken")
+                    result += f"\nMore instances available. Use page_token='{next_token}' to see more."
+                
+                return result
+            elif response.status_code == 404:
+                return f"Error: Event with ID {event_id} not found or is not a recurring event."
+            else:
+                logger.error(f"Google Calendar API Error: {response.status_code} - {response.text}")
+                return f"Error retrieving event instances: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Google Calendar authorization required: {e.message}")
+            return e.message
+        except Exception as e:
+            logger.exception(f"Error retrieving event instances: {type(e).__name__} - {str(e)}")
+            return f"Error retrieving event instances: {type(e).__name__} - {str(e)}"
     
     def list_tools(self):
-        return [self.get_event, self.get_today_events, self.list_events, self.quick_add_event]        
+        return [self.get_event, self.get_today_events, self.list_events, self.quick_add_event, self.get_event_instances]        
