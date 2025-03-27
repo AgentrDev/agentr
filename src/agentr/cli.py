@@ -58,7 +58,7 @@ def install(app_name: str):
         
         with open(config_path, 'r') as f:
             config = json.load(f)
-        config['mcpServers']['agentr-r'] = {
+        config['mcpServers']['agentr'] = {
             "command": "uvx",
             "args": ["agentr@latest", "run"],
             "env": {
