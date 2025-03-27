@@ -27,11 +27,14 @@ class RedditApp(APIApplication):
             "User-Agent": "agentr-reddit-app/0.1 by AgentR"
         }
         
-    def _post(self, url, data):
-        headers = self._get_headers()
-        response = httpx.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        return response
+    def _post(self, url, data=None, headers=None):
+        headers = headers or self._get_headers()
+        try:
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            return response
+        except (httpx.HTTPStatusError, NotAuthorizedError) as e:
+            raise
     
     def get_subreddit_posts(self, subreddit: str, limit: int = 5, timeframe: str = "day") -> str:
         """Get the top posts from a specified subreddit over a given timeframe.
