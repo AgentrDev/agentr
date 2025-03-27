@@ -73,7 +73,7 @@ class GoogleCalendarApp(APIApplication):
         """
         try:
             # Get today's date in ISO format
-            today = datetime.now().date()
+            today = datetime.utcnow().date()
             end_date = today + timedelta(days=days)
             
             # Format dates for API
@@ -275,7 +275,7 @@ class GoogleCalendarApp(APIApplication):
                 params["timeMin"] = time_min
             else:
                 # Default to current time if not specified
-                now = datetime.now().isoformat() + "Z"  # 'Z' indicates UTC time
+                now = datetime.utcnow().isoformat() + "Z"  # 'Z' indicates UTC time
                 params["timeMin"] = now
                 
             if time_max:
