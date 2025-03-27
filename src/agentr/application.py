@@ -31,9 +31,9 @@ class APIApplication(Application):
         response.raise_for_status()
         return response
     
-    def _post(self, url, data):
+    def _post(self, url, data, params=None):
         headers = self._get_headers()
-        response = httpx.post(url, headers=headers, json=data)
+        response = httpx.post(url, headers=headers, json=data, params=params)
         response.raise_for_status()
         return response
 

@@ -368,17 +368,18 @@ class GoogleCalendarApp(APIApplication):
             A confirmation message with the created event details or an error message
         """
         try:
-            # Create the URL with query parameters directly in the URL
-            base_url = f"{self.base_api_url}/events/quickAdd"
+            url = f"{self.base_api_url}/events/quickAdd"
             
-            # Add the query parameters to the URL
-            query_params = urlencode({"text": text, "sendUpdates": send_updates})
-            url = f"{base_url}?{query_params}"
+            # Use params argument instead of manually constructing URL
+            params = {
+                "text": text,
+                "sendUpdates": send_updates
+            }
             
             logger.info(f"Creating event via quickAdd: '{text}'")
             
-            # Pass None as the data parameter since all info is in the URL
-            response = self._post(url, None)
+            # Pass params to _post method
+            response = self._post(url, data=None, params=params)
             
             if response.status_code in [200, 201]:
                 event = response.json()

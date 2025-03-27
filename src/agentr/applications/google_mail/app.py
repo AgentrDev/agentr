@@ -101,7 +101,6 @@ class GmailApp(APIApplication):
             
             raw_message = self._create_message(to, subject, body)
             
-       
             draft_data = {
                 "message": {
                     "raw": raw_message
