@@ -197,21 +197,26 @@ class RedditApp(APIApplication):
         Args:
             subreddit: The name of the subreddit (e.g., 'python', 'worldnews') without the 'r/'.
             title: The title of the post.
-            kind: The type of post; one of 'self' (text post), 'link' (link post or image post).
+            kind: The type of post; either 'self' (text post) or 'link' (link or image post).
             text: The text content of the post; required if kind is 'self'.
-            url: The URL of the link or image; required if kind is 'link' or 'image'.
+            url: The URL of the link or image; required if kind is 'link'.
+                For image posts to be displayed correctly, the URL must directly point to an image file
+                and end with a valid image extension (e.g., .jpg, .png, or .gif).
+                Note that .gif support can be inconsistent.            
             flair_id: The ID of the flair to assign to the post.
 
         Returns:
-            The response from the Reddit API or an error message.
+            The JSON response from the Reddit API, or an error message as a string.
+            If the reddit api returns an error within the json response, that error will be returned as a string.
         """
-        if kind not in ["self", "link", "image"]:
-            raise ValueError("Invalid post kind. Must be one of 'self', 'link', or 'image'.")
+
+        if kind not in ["self", "link"]:
+            raise ValueError("Invalid post kind. Must be one of 'self' or 'link'.")
 
         if kind == "self" and not text:
             raise ValueError("Text content is required for text posts.")
-        if kind in ["link", "image"] and not url:
-            raise ValueError("URL is required for link and image posts.")
+        if kind == "link" and not url:
+            raise ValueError("URL is required for link posts (including images).")
 
         data = {
             "sr": subreddit,
@@ -221,16 +226,22 @@ class RedditApp(APIApplication):
             "url": url,
             "flair_id": flair_id,
         }
-        # Remove keys with None values
         data = {k: v for k, v in data.items() if v is not None}
 
         try:
-            url = f"{self.base_api_url}/api/submit"
-            
+            url_api = f"{self.base_api_url}/api/submit"
             logger.info(f"Submitting a new post to r/{subreddit}")
-            response = self._post(url,  data=data)
+            response = self._post(url_api, data=data)
+            response_json = response.json()
 
-            return response.json()
+            # Check for Reddit API errors in the response
+            if response_json and "json" in response_json and "errors" in response_json["json"]:
+                errors = response_json["json"]["errors"]
+                if errors:
+                    error_message = ", ".join([f"{code}: {message}" for code, message in errors])
+                    return f"Reddit API error: {error_message}"
+
+            return response_json
 
         except (NotAuthorizedError, httpx.HTTPStatusError) as e:
             error_response = self._handle_api_error(e, "subreddit", "submit post to")
@@ -238,7 +249,7 @@ class RedditApp(APIApplication):
         except Exception as e:
             logger.exception(f"An unexpected error occurred while submitting a post to r/{subreddit}: {e}")
             return f"An unexpected error occurred while trying to submit a post to r/{subreddit}."
-            
+
     def get_comment_by_id(self, comment_id: str) -> dict:
         """
         Retrieve a specific Reddit comment by its full ID (t1_commentid).
