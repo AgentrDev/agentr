@@ -17,7 +17,7 @@ def app_from_name(name: str):
         return GithubApp
     elif name == "google-calendar":
         return GoogleCalendarApp
-    elif name == "gmail":
+    elif name == "google-mail":
         return GmailApp
     elif name == "resend":
         return ResendApp

@@ -25,7 +25,7 @@ class GoogleCalendarApp(APIApplication):
         """
         if not self.validate():
             logger.warning("Connection not configured correctly")
-            return self.authorize()
+            return self.integration.authorize()
         
         try:
             # Get today's date in ISO format

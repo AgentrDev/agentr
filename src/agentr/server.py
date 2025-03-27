@@ -94,12 +94,13 @@ class AgentRServer(Server):
     def _list_apps_with_integrations(self):
         # TODO: get this from the API
         response = httpx.get(
-            f"{self.base_url}/api/apps",
+            f"{self.base_url}/api/apps/",
             headers={
                 "X-API-KEY": self.api_key
             }
         )
         apps = response.json()
+        logger.info(f"Apps: {apps}")
         return [AppConfig.model_validate(app) for app in apps]
             
     def _load_apps(self):

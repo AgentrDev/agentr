@@ -31,7 +31,7 @@ class GmailApp(APIApplication):
         """
         if not self.validate():
             logger.warning("Connection not configured correctly")
-            return self.authorize()
+            return self.integration.authorize()
         try:
             url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
             
