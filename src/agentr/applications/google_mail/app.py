@@ -516,12 +516,6 @@ class GmailApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error creating label: {type(e).__name__} - {str(e)}")
             return f"Error creating label: {type(e).__name__} - {str(e)}"
-
-    def list_tools(self):
-        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, 
-                self.list_drafts, self.get_message, self.list_messages, 
-                self.list_labels, self.create_label,self.get_profile]
-
     def get_profile(self) -> str:
         """Retrieve the user's Gmail profile information.
         
@@ -564,4 +558,8 @@ class GmailApp(APIApplication):
         except Exception as e:
             logger.exception(f"Error retrieving profile: {type(e).__name__} - {str(e)}")
             return f"Error retrieving profile: {type(e).__name__} - {str(e)}"
-    
+
+    def list_tools(self):
+        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, 
+                self.list_drafts, self.get_message, self.list_messages, 
+                self.list_labels, self.create_label,self.get_profile]
