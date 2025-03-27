@@ -561,6 +561,6 @@ class GmailApp(APIApplication):
             return f"Error retrieving profile: {type(e).__name__} - {str(e)}"
 
     def list_tools(self):
-        return [self.send_email, self.create_draft, self.send_draft, self.get_draft, 
-                self.list_drafts, self.get_message, self.list_messages, 
-                self.list_labels, self.create_label,self.get_profile]
+        return [self.send_email, self.create_draft, self.send_draft, self.get_draft,
+                self.list_drafts, self.get_message, self.list_messages,
+                self.list_labels, self.create_label, self.get_profile]
