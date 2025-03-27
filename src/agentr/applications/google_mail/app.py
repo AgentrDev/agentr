@@ -520,5 +520,48 @@ class GmailApp(APIApplication):
     def list_tools(self):
         return [self.send_email, self.create_draft, self.send_draft, self.get_draft, 
                 self.list_drafts, self.get_message, self.list_messages, 
-                self.list_labels, self.create_label]
+                self.list_labels, self.create_label,self.get_profile]
+
+    def get_profile(self) -> str:
+        """Retrieve the user's Gmail profile information.
+        
+        This method fetches the user's email address, message count, thread count,
+        and current history ID from the Gmail API.
+        
+        Returns:
+            A formatted string containing the user's profile information or an error message
+        """
+        try:
+            url = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+            
+            logger.info("Retrieving Gmail user profile")
+            
+            response = self._get(url)
+            
+            if response.status_code == 200:
+                profile_data = response.json()
+                
+                # Extract profile information
+                email_address = profile_data.get("emailAddress", "Unknown")
+                messages_total = profile_data.get("messagesTotal", 0)
+                threads_total = profile_data.get("threadsTotal", 0)
+                history_id = profile_data.get("historyId", "Unknown")
+                
+                # Format the response
+                result = "Gmail Profile Information:\n"
+                result += f"- Email Address: {email_address}\n"
+                result += f"- Total Messages: {messages_total:,}\n"
+                result += f"- Total Threads: {threads_total:,}\n"
+                result += f"- History ID: {history_id}\n"
+                
+                return result
+            else:
+                logger.error(f"Gmail API Error: {response.status_code} - {response.text}")
+                return f"Error retrieving profile: {response.status_code} - {response.text}"
+        except NotAuthorizedError as e:
+            logger.warning(f"Gmail authorization required: {e.message}")
+            return e.message
+        except Exception as e:
+            logger.exception(f"Error retrieving profile: {type(e).__name__} - {str(e)}")
+            return f"Error retrieving profile: {type(e).__name__} - {str(e)}"
     
