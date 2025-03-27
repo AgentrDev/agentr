@@ -185,10 +185,9 @@ class RedditApp(APIApplication):
         """
         try:
             url = f"{self.base_api_url}/r/{subreddit}/api/link_flair_v2"
-            headers = self._get_headers()
             
             logger.info(f"Fetching post flairs for subreddit: r/{subreddit}")
-            response = httpx.get(url, headers=headers)
+            response = self._get(url)
             response.raise_for_status()
 
             flairs = response.json()
