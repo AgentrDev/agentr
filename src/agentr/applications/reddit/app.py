@@ -387,6 +387,7 @@ class RedditApp(APIApplication):
         except Exception as e:
             logger.exception(f"An unexpected error occurred while editing content {content_id}: {e}")
             return {"error": f"An unexpected error occurred while trying to edit content."}
+        
     def delete_content(self, content_id: str) -> dict:
         """
         Delete a Reddit post or comment.
