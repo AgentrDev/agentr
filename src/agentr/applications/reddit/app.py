@@ -170,7 +170,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
 
     def get_post_flairs(self, subreddit: str):
@@ -199,7 +198,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
             
     def create_post(self, subreddit: str, title: str, kind: str = "self", text: str = None, url: str = None, flair_id: str = None):
@@ -259,7 +257,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
 
     def get_comment_by_id(self, comment_id: str) -> dict:
@@ -293,7 +290,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
         
     def post_comment(self, parent_id: str, text: str) -> dict:
@@ -325,7 +321,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
 
     def edit_content(self, content_id: str, text: str) -> dict:
@@ -357,7 +352,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
         
     def delete_content(self, content_id: str) -> dict:
@@ -389,7 +383,6 @@ class RedditApp(APIApplication):
         except httpx.HTTPStatusError as e:
             return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            # Logging already happened in _get if it was an HTTP error.
             return f"An unexpected error occurred: {type(e).__name__}"
 
     def list_tools(self):
