@@ -20,6 +20,10 @@ class Integration(ABC):
         self.store = store
 
     @abstractmethod
+    def authorize(self):
+        pass
+    
+    @abstractmethod
     def get_credentials(self):
         pass
 
@@ -65,15 +69,17 @@ class AgentRIntegration(Integration):
                 "X-API-KEY": self.api_key
             }
         )
+        response.raise_for_status()
         data = response.json()
         return data
 
     def authorize(self):
         response = httpx.get(
-            f"{self.base_url}/api/{self.name}/authorize",
+            f"{self.base_url}/api/{self.name}/authorize/",
             headers={
                 "X-API-KEY": self.api_key
             }
         )
+        response.raise_for_status()
         url = response.json()
         return f"Please authorize the application by clicking the link {url}"
