@@ -1,23 +1,12 @@
 from abc import ABC, abstractmethod
-from typing import Literal
+import httpx
 from mcp.server.fastmcp import FastMCP
+from agentr.applications import app_from_name
 from agentr.integration import AgentRIntegration, ApiKeyIntegration
 from agentr.store import EnvironmentStore, MemoryStore
-from pydantic import BaseModel
+from agentr.config import AppConfig, IntegrationConfig, StoreConfig
 from loguru import logger
-
-class StoreConfig(BaseModel):
-    type: Literal["memory", "environment"]
-
-class IntegrationConfig(BaseModel):
-    name: str
-    type: Literal["api_key", "agentr"]
-    credentials: dict | None = None
-    store: StoreConfig | None = None
-
-class AppConfig(BaseModel):
-    name: str
-    integration: IntegrationConfig | None = None
+import os
 
 class Server(FastMCP, ABC):
     """
@@ -33,9 +22,9 @@ class Server(FastMCP, ABC):
         pass
 
 
-class TestServer(Server):
+class LocalServer(Server):
     """
-    Test server for development purposes
+    Local server for development purposes
     """
     def __init__(self, name: str, description: str, apps_list: list[AppConfig] = [], **kwargs):
         super().__init__(name, description=description, **kwargs)
@@ -50,6 +39,8 @@ class TestServer(Server):
         return None
 
     def _get_integration(self, integration_config: IntegrationConfig):
+        if not integration_config:
+            return None
         if integration_config.type == "api_key":
             store = self._get_store(integration_config.store)
             integration = ApiKeyIntegration(integration_config.name, store=store)
@@ -63,35 +54,9 @@ class TestServer(Server):
     
     def _load_app(self, app_config: AppConfig):
         name = app_config.name
-        if name == "zenquotes":
-            from agentr.applications.zenquotes.app import ZenQuoteApp
-            return ZenQuoteApp()
-        elif name == "tavily":
-            from agentr.applications.tavily.app import TavilyApp
-            integration = self._get_integration(app_config.integration)
-            return TavilyApp(integration=integration)
-        elif name == "github":
-            from agentr.applications.github.app import GithubApp
-            integration = self._get_integration(app_config.integration)
-            return GithubApp(integration=integration)
-        elif name == "google-calendar":
-            from agentr.applications.google_calendar.app import GoogleCalendarApp
-            integration = self._get_integration(app_config.integration)
-            return GoogleCalendarApp(integration=integration)
-        elif name == "gmail":
-            from agentr.applications.google_mail.app import GmailApp
-            integration = self._get_integration(app_config.integration)
-            return GmailApp(integration=integration)
-        elif name == "resend":
-            from agentr.applications.resend.app import ResendApp
-            integration = self._get_integration(app_config.integration)
-            return ResendApp(integration=integration)
-        elif name == "reddit":
-            from agentr.applications.reddit.app import RedditApp
-            integration = self._get_integration(app_config.integration)
-            return RedditApp(integration=integration)
-        else:
-            return None
+        integration = self._get_integration(app_config.integration)
+        app = app_from_name(name)(integration=integration)
+        return app
             
     def _load_apps(self):
         logger.info(f"Loading apps: {self.apps_list}")
@@ -103,3 +68,46 @@ class TestServer(Server):
                     self.add_tool(tool)
 
                 
+
+class AgentRServer(Server):
+    """
+    AgentR server. Connects to the AgentR API to get the apps and tools. Only supports agentr integrations.
+    """
+    def __init__(self, name: str, description: str, api_key: str | None = None, **kwargs):
+        super().__init__(name, description=description, **kwargs)
+        self.api_key = api_key or os.getenv("AGENTR_API_KEY")
+        self.base_url = os.getenv("AGENTR_BASE_URL", "https://api.agentr.dev")
+        if not self.api_key:
+            raise ValueError("API key required - get one at https://agentr.dev")
+        self._load_apps()
+    
+    def _load_app(self, app_config: AppConfig):
+        name = app_config.name
+        if app_config.integration:
+            integration_name = app_config.integration.name
+            integration = AgentRIntegration(integration_name, api_key=self.api_key)
+        else:
+            integration = None
+        app = app_from_name(name)(integration=integration)
+        return app
+        
+    def _list_apps_with_integrations(self):
+        # TODO: get this from the API
+        response = httpx.get(
+            f"{self.base_url}/api/apps/",
+            headers={
+                "X-API-KEY": self.api_key
+            }
+        )
+        apps = response.json()
+        logger.info(f"Apps: {apps}")
+        return [AppConfig.model_validate(app) for app in apps]
+            
+    def _load_apps(self):
+        apps = self._list_apps_with_integrations()
+        for app in apps:
+            app = self._load_app(app)
+            if app:
+                tools = app.list_tools()
+                for tool in tools:
+                    self.add_tool(tool)
