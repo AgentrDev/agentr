@@ -27,14 +27,23 @@ class RedditApp(APIApplication):
             "User-Agent": "agentr-reddit-app/0.1 by AgentR"
         }
         
-    def _post(self, url, data=None, headers=None):
-        headers = headers or self._get_headers()
+    def _post(self, url, data):
         try:
+            headers = self._get_headers()
             response = httpx.post(url, headers=headers, data=data)
             response.raise_for_status()
             return response
-        except (httpx.HTTPStatusError, NotAuthorizedError) as e:
-            raise
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e.message}")
+            return e.message 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                return e.response.text or "Rate limit exceeded. Please try again later."
+            else:
+                raise e
+        except Exception as e:
+            logger.error(f"Error posting {url}: {e}")
+            raise e
     
     def get_subreddit_posts(self, subreddit: str, limit: int = 5, timeframe: str = "day") -> str:
         """Get the top posts from a specified subreddit over a given timeframe.
@@ -89,12 +98,12 @@ class RedditApp(APIApplication):
 
             return "\n".join(result_lines)
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "subreddit", "fetch posts from")
-            return error_response if isinstance(error_response, str) else error_response.get('error', 'Unknown error')
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while fetching posts from r/{subreddit}: {e}")
-            return f"An unexpected error occurred while trying to get posts from r/{subreddit}."
+            return f"An unexpected error occurred: {type(e).__name__}"
 
     def search_subreddits(self, query: str, limit: int = 5, sort: str = "relevance") -> str:
         """Search for subreddits matching a query string.
@@ -156,12 +165,13 @@ class RedditApp(APIApplication):
                 
             return "\n".join(result_lines)
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "subreddits", "search")
-            return error_response if isinstance(error_response, str) else error_response.get('error', 'Unknown error')
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while searching subreddits for '{query}': {e}")
-            return f"An unexpected error occurred while trying to search for subreddits."
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
 
     def get_post_flairs(self, subreddit: str):
         """Retrieve the list of available post flairs for a specific subreddit.
@@ -184,12 +194,13 @@ class RedditApp(APIApplication):
 
             return flairs
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-                error_response = self._handle_api_error(e, "subreddit", "fetch post flairs from")
-                return error_response if isinstance(error_response, str) else error_response.get('error', 'Unknown error')
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while fetching post flairs from r/{subreddit}: {e}")
-            return f"An unexpected error occurred while trying to get post flairs from r/{subreddit}."
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
             
     def create_post(self, subreddit: str, title: str, kind: str = "self", text: str = None, url: str = None, flair_id: str = None):
         """Create a new post in a specified subreddit.
@@ -243,12 +254,13 @@ class RedditApp(APIApplication):
 
             return response_json
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "subreddit", "submit post to")
-            return error_response if isinstance(error_response, str) else error_response.get('error', 'Unknown error')
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while submitting a post to r/{subreddit}: {e}")
-            return f"An unexpected error occurred while trying to submit a post to r/{subreddit}."
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
 
     def get_comment_by_id(self, comment_id: str) -> dict:
         """
@@ -276,11 +288,13 @@ class RedditApp(APIApplication):
               return {"error": "Comment not found."}
 
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "comment", "retrieve")
-            return error_response if isinstance(error_response, dict) else {"error": error_response}
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while retrieving comment {comment_id}: {e}")
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
         
     def post_comment(self, parent_id: str, text: str) -> dict:
         """
@@ -306,11 +320,13 @@ class RedditApp(APIApplication):
             return response.json()
 
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "comment", "post")
-            return error_response if isinstance(error_response, dict) else {"error": error_response}
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while posting comment to {parent_id}: {e}")
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
 
     def edit_content(self, content_id: str, text: str) -> dict:
         """
@@ -336,11 +352,13 @@ class RedditApp(APIApplication):
             return response.json()
 
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "content", "edit")
-            return error_response if isinstance(error_response, dict) else {"error": error_response}
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while editing content {content_id}: {e}")
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
         
     def delete_content(self, content_id: str) -> dict:
         """
@@ -366,11 +384,13 @@ class RedditApp(APIApplication):
             return {"message": f"Content {content_id} deleted successfully."}
 
 
-        except (NotAuthorizedError, httpx.HTTPStatusError) as e:
-            error_response = self._handle_api_error(e, "content", "delete")
-            return error_response if isinstance(error_response, dict) else {"error": error_response}
+        except NotAuthorizedError as e:
+            return e.message
+        except httpx.HTTPStatusError as e:
+            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
         except Exception as e:
-            logger.exception(f"An unexpected error occurred while deleting content {content_id}: {e}")
+            # Logging already happened in _get if it was an HTTP error.
+            return f"An unexpected error occurred: {type(e).__name__}"
 
     def list_tools(self):
         return [
