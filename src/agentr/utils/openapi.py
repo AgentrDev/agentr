@@ -1,8 +1,7 @@
-# --- START OF FILE openapi.py ---
-
 import json
 import yaml
 import re
+import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
@@ -14,13 +13,45 @@ def _generate_python_identifier(name: str) -> str:
     if not name or name.startswith('_'):
         name = 'operation' + name
     # Convert to snake_case (optional, but common for methods)
-    name = re.sub('([A-Z]+)', r'_\1', name).lower().strip('_')
+    # Improved snake_case conversion
+    name = re.sub(r'(.)([A-Z][a-z]+)', r'\1_\2', name)
+    name = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', name).lower()
+    name = name.replace('-', '_') # Also replace hyphens often used in operationIds
+    # Ensure it doesn't start with underscore after conversions
+    name = name.lstrip('_')
+    if not name: # Handle cases that become empty
+        return "unnamed_operation"
     return name
 
-# Helper function to map OpenAPI types to JSON Schema types (basic)
-def _map_openapi_type_to_json_schema_type(openapi_type: Optional[str]) -> Optional[str]:
-    if openapi_type is None:
+
+# Helper function to map OpenAPI types to JSON Schema types (handling anyOf with null)
+def _map_openapi_type_to_json_schema_type(schema_info: Optional[Dict[str, Any]]) -> Optional[str]:
+    if schema_info is None:
         return None
+
+    # Handle anyOf containing null
+    if 'anyOf' in schema_info and isinstance(schema_info['anyOf'], list):
+        non_null_type = None
+        for item in schema_info['anyOf']:
+            if isinstance(item, dict) and item.get('type') != 'null':
+                # Recursively call for the non-null type definition
+                non_null_type = _map_openapi_type_to_json_schema_type(item)
+                if non_null_type:
+                    break # Use the first non-null type found
+        if non_null_type:
+            return non_null_type
+        # If only null or empty anyOf, fallback below
+
+    openapi_type = schema_info.get('type')
+    if openapi_type is None:
+         # If type is missing, but properties exist, it's likely an object
+         if 'properties' in schema_info:
+             return 'object'
+         # If $ref exists, it's often an object, but could be other things. Defaulting to object is safer for tools.
+         if '$ref' in schema_info:
+             return 'object'
+         return None # Cannot determine type
+
     mapping = {
         "integer": "integer",
         "number": "number",
@@ -28,9 +59,10 @@ def _map_openapi_type_to_json_schema_type(openapi_type: Optional[str]) -> Option
         "boolean": "boolean",
         "array": "array",
         "object": "object",
-        # Add more mappings if needed (e.g., date, byte)
+        # Add more mappings if needed (e.g., date, byte map to string)
     }
-    return mapping.get(openapi_type, "string") # Default to string if unknown
+    return mapping.get(openapi_type, "string") # Default to string if unknown type
+
 
 def load_schema(path: Path) -> Dict[str, Any]:
     """Loads an OpenAPI schema from a YAML or JSON file."""
@@ -62,7 +94,7 @@ def generate_api_client(schema: Dict[str, Any]) -> str:
     Returns:
         str: A string containing the Python code for the API client class.
     """
-    methods = []
+    method_defs = [] # Store full method definition strings
     tool_definitions = [] # Store data for list_tools
 
     # --- Class Name ---
@@ -74,29 +106,30 @@ def generate_api_client(schema: Dict[str, Any]) -> str:
         class_name = "GeneratedApiApplication"
     elif not class_name[0].isalpha():
          class_name = "Api" + class_name # Ensure starts with letter
-    class_name = class_name[0].upper() + class_name[1:] # Ensure CamelCase
+    # Ensure CamelCase
+    class_name = ''.join(word.capitalize() for word in class_name.split('_'))
+
 
     # --- Base URL ---
-    # Try to get the first server URL, default to empty string
     servers = schema.get('servers', [])
     base_url_from_schema = ""
     if servers and isinstance(servers, list) and servers[0].get('url'):
         base_url_from_schema = servers[0]['url']
-        # Basic variable substitution (e.g., { R } -> R) - might need enhancement
-        base_url_from_schema = re.sub(r'\{.*?\}', '', base_url_from_schema).rstrip('/')
+        # Basic variable substitution - replace {var} syntax
+        base_url_from_schema = re.sub(r'\{[^{}]+\}', '', base_url_from_schema).rstrip('/')
 
 
     # --- Iterate over paths and operations ---
     for path, path_info in schema.get('paths', {}).items():
         for method_http in path_info:
-            # Ensure it's a valid HTTP method defined in the spec
             if method_http.lower() in ['get', 'post', 'put', 'delete', 'patch', 'options', 'head', 'trace']:
                 operation = path_info[method_http]
-                if not isinstance(operation, dict): continue # Skip non-dict entries like 'parameters' at path level
+                if not isinstance(operation, dict): continue
 
-                # --- Generate Method Code ---
-                method_code, func_name = generate_method_code(path, method_http, operation)
-                methods.append(method_code)
+                # --- Generate Full Method Definition ---
+                # generate_method_code now returns the complete method string
+                full_method_code, func_name = generate_method_code(path, method_http, operation)
+                method_defs.append(full_method_code)
 
                 # --- Gather Tool Information ---
                 tool_info = extract_tool_info(func_name, path, method_http, operation)
@@ -107,6 +140,7 @@ def generate_api_client(schema: Dict[str, Any]) -> str:
     list_tools_code = generate_list_tools_method(tool_definitions)
 
     # --- Construct the Class Code ---
+    # Notice how `method_defs` are joined *after* __init__
     class_code = (
         "from typing import Optional, Dict, Any, List\n"
         "from agentr.application import APIApplication\n"
@@ -118,13 +152,22 @@ def generate_api_client(schema: Dict[str, Any]) -> str:
         f"    Version: {info.get('version', 'N/A')}\n"
         f"    Description: {info.get('description', '').strip()}\n"
         f"    \"\"\"\n"
+        # --- Init Method ---
         f"    def __init__(self, name: str = '{class_name}', integration: Optional[Integration] = None, api_base_url: Optional[str] = None, **kwargs):\n"
         f"        super().__init__(name=name, integration=integration, **kwargs)\n"
         f"        # Prioritize provided api_base_url, then schema, then empty string\n"
         f"        self.api_base_url = api_base_url or '{base_url_from_schema}'\n"
         f"        if not self.api_base_url:\n"
-        f"            print(f\"Warning: No base URL found in schema or provided for {class_name}. API calls may fail.\")\n\n" +
-        '\n\n'.join(methods) + "\n\n" +
+        f"            # Use logger if available, otherwise print\n"
+        f"            try:\n"
+        f"                from loguru import logger\n"
+        f"                logger.warning(f\"No base URL found in schema or provided for {class_name}. API calls may fail.\")\n"
+        f"            except ImportError:\n"
+        f"                 print(f\"Warning: No base URL found in schema or provided for {class_name}. API calls may fail.\")\n"
+        # --- Method Definitions ---
+        "\n\n" +
+        '\n\n'.join(method_defs) + "\n\n" +
+        # --- List Tools Method ---
         list_tools_code
     )
     return class_code
@@ -132,7 +175,8 @@ def generate_api_client(schema: Dict[str, Any]) -> str:
 
 def generate_method_code(path: str, method_http: str, operation: Dict[str, Any]) -> tuple[str, str]:
     """
-    Generate the code for a single API method compatible with APIApplication.
+    Generate the code for a single API method compatible with APIApplication,
+    including the signature and body.
 
     Args:
         path (str): The API path (e.g., '/users/{user_id}').
@@ -140,11 +184,10 @@ def generate_method_code(path: str, method_http: str, operation: Dict[str, Any])
         operation (dict): The operation details from the schema.
 
     Returns:
-        tuple[str, str]: The Python code for the method, and the function name.
+        tuple[str, str]: The full Python code string for the method, and the function name.
     """
     # --- Determine function name ---
     if 'operationId' in operation:
-        # Use operationId directly if available and valid
         func_name = _generate_python_identifier(operation['operationId'])
     else:
         # Generate name from path and method
@@ -152,184 +195,193 @@ def generate_method_code(path: str, method_http: str, operation: Dict[str, Any])
         name_parts = [method_http.lower()]
         for part in path_parts:
             if part.startswith('{') and part.endswith('}'):
-                # Sanitize parameter name for function name part
                 param_name = _generate_python_identifier(part[1:-1])
                 name_parts.append('by_' + param_name)
-            elif part: # Avoid empty parts from //
-                 # Sanitize static path part
+            elif part:
                 part_name = _generate_python_identifier(part)
                 name_parts.append(part_name)
         func_name = '_'.join(name_parts)
+        if not func_name: func_name = f"{method_http}_root" # Handle root path case
 
     # --- Get parameters and request body ---
     parameters = operation.get('parameters', [])
     request_body_spec = operation.get('requestBody')
     has_body = bool(request_body_spec)
-    # Default body content type (can be refined)
-    body_content_type = 'application/json'
+    body_content_type = 'application/json' # Default
     if has_body and request_body_spec.get('content'):
-        # Get the first content type, default to json
-        body_content_type = next(iter(request_body_spec['content']), 'application/json')
-
+        # Prioritize JSON, then form, then first available
+        content = request_body_spec['content']
+        if 'application/json' in content: body_content_type = 'application/json'
+        elif 'application/x-www-form-urlencoded' in content: body_content_type = 'application/x-www-form-urlencoded'
+        elif 'multipart/form-data' in content: body_content_type = 'multipart/form-data'
+        else: body_content_type = next(iter(content), 'application/json')
 
     # --- Build function arguments ---
     args = ["self"]
     path_params_names = {p['name'] for p in parameters if p['in'] == 'path'}
     query_params_names = {p['name'] for p in parameters if p['in'] == 'query'}
-    header_params_names = {p['name'] for p in parameters if p['in'] == 'header'} # Track header params
+    header_params_names = {p['name'] for p in parameters if p['in'] == 'header'}
 
-    all_param_names = set() # Track to avoid duplicates if defined in multiple places
+    all_param_names = set()
 
-    # Add path and query params first (often required)
+    # Add path, query, header params
     for param in parameters:
-        param_name = param['name']
-        if param_name in all_param_names: continue
-        all_param_names.add(param_name)
+        param_name_orig = param['name']
+        param_name_py = _generate_python_identifier(param_name_orig) # Use valid Python name for arg
+        if param_name_py in all_param_names: continue
+        all_param_names.add(param_name_py)
 
-        # Basic type hinting (can be expanded)
         param_type = "Any"
         schema_info = param.get('schema', {})
-        if 'type' in schema_info:
-            py_type = {'string': 'str', 'integer': 'int', 'number': 'float', 'boolean': 'bool', 'array': 'List', 'object': 'Dict'}.get(schema_info['type'], 'Any')
-            param_type = py_type
+        # More robust type hinting based on schema type and format
+        py_type_map = {'string': 'str', 'integer': 'int', 'number': 'float', 'boolean': 'bool', 'array': 'List', 'object': 'Dict'}
+        schema_type = schema_info.get('type')
+        schema_format = schema_info.get('format')
+        param_type = py_type_map.get(schema_type, 'Any')
+        if param_type == 'List' and 'items' in schema_info:
+             item_type = py_type_map.get(schema_info['items'].get('type'), 'Any')
+             param_type = f"List[{item_type}]"
+        elif param_type == 'Dict':
+             param_type = "Dict[str, Any]" # Simple dict hint
 
-        if param.get('required', False):
-             args.append(f"{param_name}: {param_type}")
+        is_required = param.get('required', False) or param['in'] == 'path'
+
+        if is_required:
+             args.append(f"{param_name_py}: {param_type}")
         else:
-            args.append(f"{param_name}: Optional[{param_type}] = None")
+             args.append(f"{param_name_py}: Optional[{param_type}] = None")
 
     # Add request body parameter if applicable
+    body_param_name = "request_body" # Consistent Python name
     if has_body:
         body_required = request_body_spec.get('required', False)
-        body_param_name = "request_body" # Use a distinct name
         # Basic type hinting for body
         body_type = "Any"
         try:
+            # Find the schema, potentially dealing with content types
             body_schema = request_body_spec['content'][body_content_type]['schema']
-            if 'type' in body_schema:
-                 body_type = {'string': 'str', 'integer': 'int', 'number': 'float', 'boolean': 'bool', 'array': 'List', 'object': 'Dict'}.get(body_schema['type'], 'Any')
-        except KeyError:
-            pass # Keep Any if schema is complex or missing
+            schema_type = body_schema.get('type')
+            py_type_map = {'string': 'str', 'integer': 'int', 'number': 'float', 'boolean': 'bool', 'array': 'List', 'object': 'Dict'}
+            body_type = py_type_map.get(schema_type, 'Any')
+            if body_type == 'List' and 'items' in body_schema:
+                 item_type = py_type_map.get(body_schema['items'].get('type'), 'Any')
+                 # TODO: Handle $ref in items
+                 body_type = f"List[{item_type}]"
+            elif body_type == 'Dict' or body_type == 'Any' and ('properties' in body_schema or '$ref' in body_schema):
+                 body_type = "Dict[str, Any]" # Default complex objects/refs to Dict
+        except (KeyError, TypeError):
+            pass # Keep Any if schema is missing or complex
 
         if body_required:
             args.append(f"{body_param_name}: {body_type}")
         else:
             args.append(f"{body_param_name}: Optional[{body_type}] = None")
-            
-    # Add header parameters (usually optional)
-    for param in parameters:
-        if param['in'] == 'header':
-            param_name = param['name']
-            if param_name in all_param_names: continue
-            all_param_names.add(param_name)
-            # Basic type hinting
-            param_type = "Any"
-            schema_info = param.get('schema', {})
-            if 'type' in schema_info:
-                py_type = {'string': 'str', 'integer': 'int', 'number': 'float', 'boolean': 'bool'}.get(schema_info['type'], 'Any') # No list/dict for headers usually
-                param_type = py_type
-                
-            # Headers often not marked required in schema but might be needed
-            # Defaulting to optional for generation simplicity
-            args.append(f"{param_name}: Optional[{param_type}] = None")
 
+    # --- Method Signature ---
+    signature = f"    def {func_name}({', '.join(args)}) -> httpx.Response:"
 
-    signature = f"    def {func_name}({', '.join(args)}) -> httpx.Response:" # Return raw response for flexibility
-
-
-    # --- Build method body ---
+    # --- Method Body ---
     body_lines = []
-    docstring_lines = [f"        \"\"\"{operation.get('summary', '')}\n"]
-    if operation.get('description'):
-         docstring_lines.append(f"        {operation.get('description')}\n")
-    docstring_lines.append(f"        Args:")
-    # Add args documentation (simplified)
-    for arg in args[1:]: # Skip self
-        arg_name = arg.split(':')[0].strip()
-        docstring_lines.append(f"            {arg_name}: From OpenAPI spec.") # TODO: Add description from schema if possible
+
+    # Docstring
+    docstring_lines = [f"        \"\"\"{operation.get('summary', func_name)}\n"]
+    if operation.get('description') and operation.get('description') != operation.get('summary'):
+         docstring_lines.append(f"\n        {operation.get('description')}\n")
+    docstring_lines.append(f"\n        Args:")
+    for arg_str in args[1:]: # Skip self
+        arg_name = arg_str.split(':')[0].strip()
+        # Find original param name for doc lookup if needed (simplified here)
+        docstring_lines.append(f"            {arg_name}: From OpenAPI spec.")
     docstring_lines.append(f"\n        Returns:")
     docstring_lines.append(f"            httpx.Response: The raw response from the API call.")
     docstring_lines.append(f"        \"\"\"")
     body_lines.extend(docstring_lines)
 
 
-    # Path parameters formatting
-    path_params_dict_str = ', '.join([f"'{p['name']}': {p['name']}" for p in parameters if p['in'] == 'path'])
-    body_lines.append(f"        path_params = {{{path_params_dict_str}}}")
-    # Check required path params
+    # Path parameters formatting & checks
+    path_params_dict_items = []
     for p in parameters:
-        if p['in'] == 'path' and p.get('required', True): # Path params are implicitly required
-             body_lines.append(f"        if {p['name']} is None:")
-             body_lines.append(f"            raise ValueError(\"Missing required path parameter: {p['name']}\")")
+         if p['in'] == 'path':
+             p_name_orig = p['name']
+             p_name_py = _generate_python_identifier(p_name_orig)
+             path_params_dict_items.append(f"'{p_name_orig}': {p_name_py}")
+             # Path params are always required
+             body_lines.append(f"        if {p_name_py} is None:")
+             body_lines.append(f"            raise ValueError(\"Missing required path parameter: {p_name_py} (original: {p_name_orig})\")")
+    body_lines.append(f"        path_params = {{{', '.join(path_params_dict_items)}}}")
 
 
     # Format URL
-    # Ensure path starts with '/' if base_url is present, otherwise handle relative paths
     formatted_path = path if path.startswith('/') else '/' + path
     body_lines.append(f"        url = f\"{{self.api_base_url}}{formatted_path}\".format_map(path_params)")
 
-    # Query parameters
+
+    # Query parameters & checks
     query_params_items = []
     for p in parameters:
         if p['in'] == 'query':
-            query_params_items.append(f"('{p['name']}', {p['name']})")
-            # Check required query params (if explicitly required)
+            p_name_orig = p['name']
+            p_name_py = _generate_python_identifier(p_name_orig)
+            query_params_items.append(f"('{p_name_orig}', {p_name_py})")
             if p.get('required', False):
-                 body_lines.append(f"        if {p['name']} is None:")
-                 body_lines.append(f"            raise ValueError(\"Missing required query parameter: {p['name']}\")")
-
+                 body_lines.append(f"        if {p_name_py} is None:")
+                 body_lines.append(f"            raise ValueError(\"Missing required query parameter: {p_name_py} (original: {p_name_orig})\")")
     query_params_list_str = '[' + ', '.join(query_params_items) + ']'
     body_lines.append(
         f"        query_params = {{k: v for k, v in {query_params_list_str} if v is not None}}"
     )
 
+
     # Header parameters
     header_params_items = []
     for p in parameters:
         if p['in'] == 'header':
-            header_params_items.append(f"('{p['name']}', {p['name']})")
-            # No check for required here, handled by APIApplication potentially
-
+            p_name_orig = p['name']
+            p_name_py = _generate_python_identifier(p_name_orig)
+            header_params_items.append(f"('{p_name_orig}', {p_name_py})")
+            # Required check for headers can be tricky, often handled by API or base class
     header_params_list_str = '[' + ', '.join(header_params_items) + ']'
     body_lines.append(
         f"        header_params = {{k: v for k, v in {header_params_list_str} if v is not None}}"
     )
 
+
     # Make HTTP request using APIApplication methods
     api_method = f"self._{method_http.lower()}"
     request_args = ["url"]
-    request_kwargs = ["params=query_params", "headers=header_params"] # Pass headers
+    request_kwargs = ["params=query_params", "headers=header_params"]
 
+    # Body handling
     if method_http.lower() in ['post', 'put', 'patch']:
         if has_body:
-             # Check required body
              if request_body_spec.get('required', False):
                  body_lines.append(f"        if {body_param_name} is None:")
                  body_lines.append(f"            raise ValueError(\"Missing required request body\")")
 
-             # Pass body as 'json' assuming application/json.
-             # More complex handling needed for other content types (form data etc.)
+             # Add body based on content type
              if body_content_type == 'application/json':
                  request_kwargs.append(f"json={body_param_name}")
-             elif 'form' in body_content_type: # Basic form data handling
+             elif 'form' in body_content_type:
                  request_kwargs.append(f"data={body_param_name}")
-             else: # Default or other types - pass as data, might need adjustment
-                 request_kwargs.append(f"data={body_param_name}") # Or content= ? Check httpx/APIApplication
+             else: # Default for other types (e.g., text/plain)
+                 request_kwargs.append(f"content={body_param_name}") # Use content for raw data
 
         body_lines.append(f"        response = {api_method}({', '.join(request_args + request_kwargs)})")
 
     elif method_http.lower() in ['get', 'delete', 'head', 'options']:
-         # No body for these typically
          body_lines.append(f"        response = {api_method}({', '.join(request_args + request_kwargs)})")
-    else: # TRACE etc. - handle simply
+    else: # TRACE etc.
          body_lines.append(f"        response = {api_method}({', '.join(request_args + request_kwargs)})")
 
-
-    # Return the response (APIApplication handles raise_for_status)
-    body_lines.append("        # APIApplication's _get/_post/etc. methods handle exceptions\n        # and return the httpx.Response object or raise/return error info.")
+    # Return statement
+    body_lines.append("        # APIApplication's _get/_post/etc. methods handle exceptions")
+    body_lines.append("        # and return the httpx.Response object.")
     body_lines.append("        return response")
 
-    return '\n'.join(body_lines), func_name
+    # --- Combine signature and body ---
+    full_method_code = signature + '\n' + '\n'.join(body_lines)
+
+    return full_method_code, func_name
 
 
 def extract_tool_info(func_name: str, path: str, method_http: str, operation: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -348,11 +400,17 @@ def extract_tool_info(func_name: str, path: str, method_http: str, operation: Di
 
     # Process path, query, header, cookie parameters
     for param in parameters:
-        param_name = param['name']
+        param_name = _generate_python_identifier(param['name']) # Use pythonic name for tool param
         param_schema = param.get('schema', {})
+        param_description = param.get('description', '')
+        param_type = _map_openapi_type_to_json_schema_type(param_schema)
+
+        if param_type is None: # Skip params where type cannot be determined
+            continue
+
         prop_def = {
-            "description": param.get('description', ''),
-            "type": _map_openapi_type_to_json_schema_type(param_schema.get('type'))
+            "description": param_description,
+            "type": param_type
         }
         # Add enum, default etc. if present
         if 'enum' in param_schema: prop_def['enum'] = param_schema['enum']
@@ -360,8 +418,10 @@ def extract_tool_info(func_name: str, path: str, method_http: str, operation: Di
         # Handle array items type
         if prop_def['type'] == 'array' and 'items' in param_schema:
             items_schema = param_schema['items']
-            prop_def['items'] = { "type": _map_openapi_type_to_json_schema_type(items_schema.get('type'))}
-            # TODO: Deeper schema nesting for items/objects if needed
+            item_type = _map_openapi_type_to_json_schema_type(items_schema)
+            if item_type:
+                prop_def['items'] = { "type": item_type }
+                # TODO: Deeper schema nesting for items/objects if needed
 
         properties[param_name] = prop_def
 
@@ -374,35 +434,41 @@ def extract_tool_info(func_name: str, path: str, method_http: str, operation: Di
         body_required = request_body_spec.get('required', False)
         body_description = request_body_spec.get('description', 'The request body.')
 
-        # Try to get schema for the primary content type
         body_schema = {}
-        body_content_type = None
+        ref_name = None
         if request_body_spec.get('content'):
+            # Find preferred content type schema
             content = request_body_spec['content']
-            # Prefer JSON, then form, then first available
-            if 'application/json' in content:
-                body_content_type = 'application/json'
-            elif 'application/x-www-form-urlencoded' in content:
-                 body_content_type = 'application/x-www-form-urlencoded'
-            elif 'multipart/form-data' in content:
-                 body_content_type = 'multipart/form-data'
-            else:
-                 body_content_type = next(iter(content), None)
+            body_content_type = None
+            if 'application/json' in content: body_content_type = 'application/json'
+            elif 'application/x-www-form-urlencoded' in content: body_content_type = 'application/x-www-form-urlencoded'
+            elif 'multipart/form-data' in content: body_content_type = 'multipart/form-data'
+            else: body_content_type = next(iter(content), None)
 
             if body_content_type and 'schema' in content[body_content_type]:
                 body_schema = content[body_content_type]['schema']
+                # Check for $ref and add to description
+                if '$ref' in body_schema and isinstance(body_schema['$ref'], str):
+                    try:
+                        ref_name = body_schema['$ref'].split('/')[-1]
+                        body_description += f" (Schema: {ref_name})"
+                    except: pass # Ignore parsing errors
+
+        body_type = _map_openapi_type_to_json_schema_type(body_schema)
+        if body_type is None: body_type = 'object' # Default to object if type is complex/undetermined
 
         prop_def = {
-             "description": body_description,
-             "type": _map_openapi_type_to_json_schema_type(body_schema.get('type', 'object')) # Default to object if type missing
+             "description": body_description.strip(),
+             "type": body_type
         }
         # Add details from schema if available (basic)
         if prop_def['type'] == 'object' and 'properties' in body_schema:
-             # Could recursively define properties here, keeping it simple for now
-             prop_def['properties'] = {} # Placeholder
+             prop_def['properties'] = {} # Placeholder for deeper schema generation if needed
         elif prop_def['type'] == 'array' and 'items' in body_schema:
              items_schema = body_schema['items']
-             prop_def['items'] = { "type": _map_openapi_type_to_json_schema_type(items_schema.get('type'))}
+             item_type = _map_openapi_type_to_json_schema_type(items_schema)
+             if item_type:
+                prop_def['items'] = { "type": item_type }
 
         properties[body_param_name] = prop_def
 
@@ -435,7 +501,13 @@ def generate_list_tools_method(tool_definitions: List[Dict[str, Any]]) -> str:
 
     # Use json.dumps for pretty printing the list of dicts within the code
     # Need to indent it correctly for the method body
-    tools_list_str = json.dumps(tool_definitions, indent=8) # Indent with 8 spaces for inside method
+    try:
+        tools_list_str = json.dumps(tool_definitions, indent=8) # Indent with 8 spaces
+    except TypeError as e:
+        print(f"Error serializing tool definitions to JSON: {e}")
+        print("Problematic tool definitions:", tool_definitions)
+        tools_list_str = "[] # Error during serialization"
+
 
     # Add indentation to each line of the generated string
     indented_tools_list_str = "\n".join(["        " + line for line in tools_list_str.splitlines()])
@@ -448,89 +520,20 @@ def generate_list_tools_method(tool_definitions: List[Dict[str, Any]]) -> str:
     )
     return method_code
 
-# Example usage - replace with your actual schema file path
+# Example usage
 if __name__ == "__main__":
-    # Create a dummy openapi.yaml for testing if it doesn't exist
-    dummy_schema_path = Path("openapi.yaml")
-    if not dummy_schema_path.exists():
-        print(f"Creating dummy {dummy_schema_path} for testing.")
-        dummy_schema_content = """
-openapi: 3.0.0
-info:
-  title: Sample Pet Store API
-  version: 1.0.0
-  description: A sample API to demonstrate OpenAPI generation for AgentR
-servers:
-  - url: https://api.example.com/v1
-    description: Production server
-paths:
-  /pets:
-    get:
-      summary: List all pets
-      operationId: listPets
-      parameters:
-        - name: limit
-          in: query
-          description: How many items to return at one time (max 100)
-          required: false
-          schema:
-            type: integer
-            format: int32
-      responses:
-        '200':
-          description: A paged array of pets
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: integer }
-                    name: { type: string }
-    post:
-      summary: Create a pet
-      operationId: createPet
-      requestBody:
-        description: The pet to create
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name]
-              properties:
-                name: { type: string }
-                tag: { type: string }
-      responses:
-        '201':
-          description: Null response
-  /pets/{petId}:
-    get:
-      summary: Info for a specific pet
-      operationId: showPetById
-      parameters:
-        - name: petId
-          in: path
-          required: true
-          description: The id of the pet to retrieve
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Expected response to a valid request
-          content:
-            application/json:
-              schema:
-                  type: object
-                  properties:
-                    id: { type: integer }
-                    name: { type: string }
-"""
-        with open(dummy_schema_path, "w") as f:
-            f.write(dummy_schema_content)
+    schema_file = Path("openapi.json") # Use the provided JSON file
 
-    schema_file = Path("openapi.yaml") # Or Path("openapi.json")
+    if not schema_file.exists():
+         print(f"Error: Schema file '{schema_file}' not found.", file=sys.stderr)
+         # Create a dummy openapi.yaml for testing if needed
+         dummy_schema_path = Path("openapi.yaml")
+         if not dummy_schema_path.exists():
+            print(f"Creating dummy {dummy_schema_path} for testing.")
+            # ... (dummy yaml content from previous example) ...
+            # with open(dummy_schema_path, "w") as f: f.write(dummy_schema_content)
+         # sys.exit(1) # Exit if the target file isn't there
+
 
     try:
         print(f"Loading schema from: {schema_file.resolve()}")
@@ -543,7 +546,6 @@ paths:
         print(generated_code)
         print("--- End Generated Code ---")
 
-        # Optional: Write to a file
         output_file = Path("generated_api_client.py")
         with open(output_file, "w", encoding='utf-8') as f:
             f.write(generated_code)
@@ -553,5 +555,3 @@ paths:
         print(f"Error: {e}")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
-
-# --- END OF FILE openapi.py ---
