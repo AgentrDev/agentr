@@ -28,7 +28,8 @@ def generate(schema_path: Path = typer.Option(..., "--schema", "-s")):
 @app.command()
 def run():
     """Run the MCP server"""
-    from agentr.test import mcp
+    from agentr.server import AgentRServer
+    mcp = AgentRServer(name="AgentR Server", description="AgentR Server")
     mcp.run()
 
 @app.command()

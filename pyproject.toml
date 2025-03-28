@@ -1,6 +1,6 @@
 [project]
 name = "agentr"
-version = "0.1.6"
+version = "0.1.7"
 description = "A python framework to build MCP servers"
 readme = "README.md"
 authors = [
@@ -12,6 +12,12 @@ dependencies = [
     "mcp>=1.5.0",
     "pyyaml>=6.0.2",
     "typer>=0.15.2",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8.3.5",
+  "pytest-asyncio>=0.26.0",
 ]
 
 [project.scripts]

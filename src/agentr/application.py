@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+
+from loguru import logger
+from agentr.exceptions import NotAuthorizedError
 from agentr.integration import Integration
 import httpx
 
@@ -26,28 +29,61 @@ class APIApplication(Application):
         return {}
     
     def _get(self, url, params=None):
-        headers = self._get_headers()
-        response = httpx.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        return response
+        try:
+            headers = self._get_headers()
+            response = httpx.get(url, headers=headers, params=params)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e.message}")
+            return e.message 
+        except Exception as e:
+            logger.error(f"Error getting {url}: {e}")
+            raise e
+
     
-    def _post(self, url, data, params=None):
-        headers = self._get_headers()
-        response = httpx.post(url, headers=headers, json=data, params=params)
-        response.raise_for_status()
-        return response
+    def _post(self, url, data):
+        try:
+            headers = self._get_headers()
+            response = httpx.post(url, headers=headers, json=data)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e.message}")
+            return e.message 
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                return e.response.text or "Rate limit exceeded. Please try again later."
+            else:
+                raise e
+        except Exception as e:
+            logger.error(f"Error posting {url}: {e}")
+            raise e
 
     def _put(self, url, data):
-        headers = self._get_headers()
-        response = httpx.put(url, headers=headers, json=data)
-        response.raise_for_status()
-        return response
+        try:
+            headers = self._get_headers()
+            response = httpx.put(url, headers=headers, json=data)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e.message}")
+            return e.message 
+        except Exception as e:
+            logger.error(f"Error posting {url}: {e}")
+            raise e
 
     def _delete(self, url):
-        headers = self._get_headers()
-        response = httpx.delete(url, headers=headers)
-        response.raise_for_status()
-        return response
+        try:
+            headers = self._get_headers()
+            response = httpx.delete(url, headers=headers)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Reddit authorization needed: {e.message}")
+            return e.message 
+        except Exception as e:
+            logger.error(f"Error posting {url}: {e}")
 
     def validate(self):
         pass

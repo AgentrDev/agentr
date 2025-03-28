@@ -27,30 +27,24 @@ class GithubApp(APIApplication):
     def star_repository(self, repo_full_name: str) -> str:
         """Star a GitHub repository
         
-            Args:
-                repo_full_name: The full name of the repository (e.g. 'owner/repo')
-                
-            Returns:
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
             
-                A confirmation message
+        Returns:
+        
+            A confirmation message
         """
-        try:
-            url = f"https://api.github.com/user/starred/{repo_full_name}"
-            response = self._put(url, data={})
-            
-            if response.status_code == 204:
-                return f"Successfully starred repository {repo_full_name}"
-            elif response.status_code == 404:
-                return f"Repository {repo_full_name} not found"
-            else:
-                logger.error(response.text)
-                return f"Error starring repository: {response.text}"
-        except NotAuthorizedError as e:
-            return e.message
-        except Exception as e:
-            logger.error(e)
-            raise e
-       
+        url = f"https://api.github.com/user/starred/{repo_full_name}"
+        response = self._put(url, data={})
+        
+        if response.status_code == 204:
+            return f"Successfully starred repository {repo_full_name}"
+        elif response.status_code == 404:
+            return f"Repository {repo_full_name} not found"
+        else:
+            logger.error(response.text)
+            return f"Error starring repository: {response.text}"
+        
 
     def list_commits(self, repo_full_name: str) -> str:
         """List recent commits for a GitHub repository

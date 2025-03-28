@@ -20,6 +20,10 @@ class Integration(ABC):
         self.store = store
 
     @abstractmethod
+    def authorize(self):
+        pass
+    
+    @abstractmethod
     def get_credentials(self):
         pass
 
@@ -50,49 +54,32 @@ class AgentRIntegration(Integration):
         if not self.api_key:
             logger.error("API key for AgentR is missing. Please visit https://agentr.dev to create an API key, then set it as AGENTR_API_KEY environment variable.")
             raise ValueError("AgentR API key required - get one at https://agentr.dev")
-
-        self.base_url = "https://auth.agentr.dev"
-        self.user_id = "default"
+        self.base_url = os.getenv("AGENTR_BASE_URL", "https://api.agentr.dev")
     
-    def _create_session_token(self):
-        url = "https://auth.agentr.dev/connect/sessions"
-        body = {
-            "end_user": {
-                "id": self.user_id,
-            },
-            "allowed_integrations": [self.name]
-        }
-        response = httpx.post(url, headers={"Authorization": f"Bearer {self.api_key}"}, json=body)
-        data = response.json()
-        print(data)
-        return data["data"]["token"]
     
-    def _get_authorize_url(self):
-        session_token = self._create_session_token()
-        return f"https://auth.agentr.dev/oauth/connect/{self.name}?connect_session_token={session_token}"
-    
-    def get_connection_by_owner(self):
-        url = f"https://auth.agentr.dev/connection?endUserId={self.user_id}"
-        response = httpx.get(url, headers={"Authorization": f"Bearer {self.api_key}"})
-        if response.status_code == 200:
-            connections = response.json()["connections"]
-            for connection in connections:
-                if connection["provider_config_key"] == self.name:
-                    return connection["connection_id"]
-        return None
-
-    def set_credentials(self, credentials: dict):
-        raise NotImplementedError("AgentR Integration does not support setting credentials. Visit the authorize url to set credentials.")
+    def set_credentials(self, credentials: dict| None = None):
+        return self.authorize()
+        # raise NotImplementedError("AgentR Integration does not support setting credentials. Visit the authorize url to set credentials.")
 
     def get_credentials(self):
-        connection_id = self.get_connection_by_owner()
-        logger.info(f"Connection ID: {connection_id}")
-        if connection_id:
-            response = httpx.get(f"{self.base_url}/connection/{connection_id}?provider_config_key={self.name}", headers={"Authorization": f"Bearer {self.api_key}"})
-            data = response.json()
-            return data.get("credentials")
-        return None
+        response = httpx.get(
+            f"{self.base_url}/api/{self.name}/credentials/",
+            headers={
+                "accept": "application/json",
+                "X-API-KEY": self.api_key
+            }
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data
 
     def authorize(self):
-        url = self._get_authorize_url()
+        response = httpx.get(
+            f"{self.base_url}/api/{self.name}/authorize/",
+            headers={
+                "X-API-KEY": self.api_key
+            }
+        )
+        response.raise_for_status()
+        url = response.json()
         return f"Please authorize the application by clicking the link {url}"

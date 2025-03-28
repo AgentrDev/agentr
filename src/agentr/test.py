@@ -1,4 +1,4 @@
-from agentr.server import TestServer
+from agentr.server import LocalServer
 from agentr.store import MemoryStore
 
 store = MemoryStore()
@@ -25,11 +25,13 @@ apps_list = [
         }
     }
 ]
-mcp = TestServer(name="Test Server", description="Test Server", apps_list=apps_list)
+mcp = LocalServer(name="Test Server", description="Test Server", apps_list=apps_list)
+
 
 async def test():
     tools = await mcp.list_tools()
-    print(tools)
+    from pprint import pprint
+    pprint(tools)
     result = await mcp.call_tool("star_repository", {"repo_full_name": "manojbajaj95/config"})
     print(result)
 
