@@ -63,7 +63,7 @@ class AgentRIntegration(Integration):
 
     def get_credentials(self):
         response = httpx.get(
-            f"{self.base_url}/api/{self.name}/credentials",
+            f"{self.base_url}/api/{self.name}/credentials/",
             headers={
                 "accept": "application/json",
                 "X-API-KEY": self.api_key
