@@ -2,11 +2,15 @@ from abc import ABC, abstractmethod
 import httpx
 from mcp.server.fastmcp import FastMCP
 from agentr.applications import app_from_name
+from agentr.exceptions import NotAuthorizedError
 from agentr.integration import AgentRIntegration, ApiKeyIntegration
 from agentr.store import EnvironmentStore, MemoryStore
 from agentr.config import AppConfig, IntegrationConfig, StoreConfig
 from loguru import logger
 import os
+from typing import Any
+from mcp.types import TextContent
+from mcp.server.fastmcp.exceptions import ToolError
 
 class Server(FastMCP, ABC):
     """
@@ -21,6 +25,17 @@ class Server(FastMCP, ABC):
     def _load_apps(self):
         pass
 
+    async def call_tool(self, name: str, arguments: dict[str, Any]):
+        """Call a tool by name with arguments."""
+        try:
+            result = await super().call_tool(name, arguments)
+            return result
+        except ToolError as e:
+            raised_error = e.__cause__
+            if isinstance(raised_error, NotAuthorizedError):
+                return [TextContent(type="text", text=raised_error.message)]
+            else:
+                raise e
 
 class LocalServer(Server):
     """
