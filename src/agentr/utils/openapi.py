@@ -1,4 +1,5 @@
 import json
+import re 
 import yaml
 from pathlib import Path
 from typing import List, Dict, Any, Optional # Added for type hinting
@@ -6,6 +7,16 @@ import httpx # Ensure this is imported
 
 # Type hint for OpenAPI Parameter Object (simplified)
 ParameterObject = Dict[str, Any]
+
+
+def to_snake_case(name: str) -> str:
+    """Converts a PascalCase or camelCase string to snake_case."""
+    if not name:
+        return ""
+    # Insert underscore before uppercase letters (but not the first letter)
+    name = re.sub(r'(?<!^)(?=[A-Z])', '_', name)
+    # Convert to lowercase
+    return name.lower()
 
 def load_schema(path: Path) -> Dict[str, Any]:
     """Loads an OpenAPI schema from a YAML or JSON file."""
@@ -194,7 +205,11 @@ def generate_method_code(path: str, method: str, operation: Dict[str, Any], para
     # --- Determine function name ---
     if 'operationId' in operation:
         # Sanitize operationId: replace dots and hyphens with underscores
-        func_name = operation['operationId'].replace('.', '_').replace('-', '_')
+        op_id = operation['operationId']
+        # 2. Basic sanitization (dots/hyphens to underscores)
+        sanitized_op_id = op_id.replace('.', '_').replace('-', '_')
+        # 3. Convert to snake_case <<< MODIFICATION HERE >>>
+        func_name = to_snake_case(sanitized_op_id)
     else:
         # Generate name from path and method if no operationId
         path_parts = path.strip('/').split('/')
@@ -451,21 +466,48 @@ def generate_tool_definition(func_name: str, operation: Dict[str, Any], final_pa
      request_body_info = operation.get('requestBody')
      if request_body_info:
          body_arg_name = "request_body" # Assuming this is the chosen unique name
-         # ... (logic to determine body description and type as before) ...
+         # Determine body description and type
+         body_description = "The request body."
+         body_type = "object" # Default type for body
+         body_content = request_body_info.get('content', {})
+         json_schema = body_content.get('application/json', {}).get('schema', {})
+         if json_schema:
+             schema_type = json_schema.get('type', 'object')
+             if schema_type == 'array':
+                 body_type = 'array'
+             elif schema_type == 'object':
+                 body_type = 'object'
+             if '$ref' in json_schema:
+                 ref_name = json_schema['$ref'].split('/')[-1]
+                 body_description = f"The request body. (Schema: {ref_name})"
+             elif json_schema.get('title'):
+                 body_description = f"The request body. (Schema: {json_schema['title']})"
+             elif schema_type: # Add type if title/ref missing
+                 body_description = f"The request body. (Type: {schema_type})"
+
          tool_params["properties"][body_arg_name] = {
-            # ... (description, type) ...
+             "description": body_description,
+             "type": body_type,
          }
          if request_body_info.get('required', False):
              tool_params["required"].append(body_arg_name)
+             
 
      # ... (rest of tool definition generation: remove empty required, create final dict) ...
      if not tool_params["required"]:
          del tool_params["required"]
 
+     tool_description = operation.get('summary', '').strip()
+     if not tool_description:
+        tool_description = operation.get('description', func_name).strip()
+
+     # Construct the final tool dictionary including name and description
      tool_definition = {
-        # ... (name, description) ...
-        "parameters": tool_params
+         "name": func_name,             # Use the generated function name
+         "description": tool_description, # Use the determined description
+         "parameters": tool_params      # Include the parameters definition
      }
+     
      return tool_definition
 
 # Example usage (remains mostly the same, but will now use the modified functions)
