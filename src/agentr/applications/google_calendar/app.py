@@ -141,7 +141,7 @@ class GoogleCalendarApp(APIApplication):
                 logger.error(f"Google Calendar API Error: {response.status_code} - {response.text}")
                 return f"Error retrieving calendar events: {response.status_code} - {response.text}"
         except NotAuthorizedError as e:
-            logger.warning(f"Google Calendarlogger authorization required: {e.message}")
+            logger.warning(f"Google Calendar authorization required: {e.message}")
             return e.message
         except Exception as e:
             logger.exception(f"Error retrieving calendar events: {type(e).__name__} - {str(e)}")
