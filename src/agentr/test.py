@@ -23,6 +23,13 @@ apps_list = [
             "name": "github",
             "type": "agentr",
         }
+    },
+    {
+        "name": "agentrr",
+        "integration": {
+            "name": "github",
+            "type": "agentr",
+        }
     }
 ]
 mcp = LocalServer(name="Test Server", description="Test Server", apps_list=apps_list)
