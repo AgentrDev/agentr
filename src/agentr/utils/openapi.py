@@ -55,8 +55,23 @@ def generate_api_client(schema):
     api_title = info.get('title', 'Generated API Client')
     api_version = info.get('version', '')
     api_description = info.get('description', '')
-    class_name = "".join(part.capitalize() for part in api_title.replace("-", " ").replace("_", " ").split()) or "GeneratedApiClient"
 
+    # --- Generate Class Name (Modified Logic) ---
+    base_name = "".join(part.capitalize() for part in api_title.replace("-", " ").replace("_", " ").split())
+    sanitized_name = ''.join(c for c in base_name if c.isalnum() or c == '_')
+
+    if not sanitized_name:
+        sanitized_name = "GeneratedApiClient" # Use default if sanitization removed everything
+
+    if sanitized_name[0].isdigit():
+        class_name = "Api" + sanitized_name
+    # 5. Check if the first character is an underscore (less common, but possible)
+    elif sanitized_name.startswith('_'):
+         class_name = "Api" + sanitized_name
+    else:
+        # Use the sanitized name if it starts with a valid character (letter)
+        class_name = sanitized_name
+        
     # --- Iterate over paths and operations ---
     for path, path_info in schema.get('paths', {}).items():
         # Get parameters defined at the path level (apply to all methods)

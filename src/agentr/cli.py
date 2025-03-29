@@ -15,7 +15,7 @@ def generate(schema_path: Path = typer.Option(..., "--schema", "-s")):
     if not schema_path.exists():
         typer.echo(f"Error: Schema file {schema_path} does not exist", err=True)
         raise typer.Exit(1)
-    from .utils.openapi_new import generate_api_client, load_schema
+    from .utils.openapi import generate_api_client, load_schema
 
     try:
         schema = load_schema(schema_path)
