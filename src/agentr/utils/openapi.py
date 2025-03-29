@@ -342,10 +342,9 @@ def generate_method_code(path: str, method: str, operation: Dict[str, Any], para
     elif http_verb in ['post', 'put', 'patch'] and not has_body:
         pass 
 
-    body_lines.append(f"        response = self._{http_verb}({', '.join(request_args)})")
-    body_lines.append("        # APIApplication's _get/_post/etc. methods handle exceptions")
-    body_lines.append("        # and return the httpx.Response object.")
-    body_lines.append("        return response")
+    body_lines.append(f"       response = self._{http_verb}({', '.join(request_args)})")
+    body_lines.append("        response.raise_for_status()")
+    body_lines.append("        return response.json()")
 
     full_method_code = signature + '\n' + docstring + '\n' + '\n'.join(body_lines)
 
