@@ -1,6 +1,25 @@
 import json
 import yaml
+import re
 from pathlib import Path
+
+
+def convert_to_snake_case(identifier: str) -> str:
+    """
+    Convert a camelCase or PascalCase identifier to snake_case.
+    
+    Args:
+        identifier (str): The string to convert
+        
+    Returns:
+        str: The converted snake_case string
+    """
+    if not identifier:
+        return identifier
+    # Add underscore between lowercase and uppercase letters
+    result = re.sub(r'([a-z0-9])([A-Z])', r'\1_\2', identifier)
+    # Convert to lowercase
+    return result.lower()
 
 
 def load_schema(path: Path):
@@ -14,6 +33,7 @@ def load_schema(path: Path):
         else:
             return json.load(f)
 
+
 def generate_api_client(schema):
     """
     Generate a Python API client class from an OpenAPI schema.
@@ -25,24 +45,33 @@ def generate_api_client(schema):
         str: A string containing the Python code for the API client class.
     """
     methods = []
+    method_names = []
     
     # Iterate over paths and their operations
     for path, path_info in schema.get('paths', {}).items():
         for method in path_info:
             if method in ['get', 'post', 'put', 'delete', 'patch', 'options', 'head']:
                 operation = path_info[method]
-                method_code = generate_method_code(path, method, operation)
+                method_code, func_name = generate_method_code(path, method, operation)
                 methods.append(method_code)
+                method_names.append(func_name)
+    
+    # Generate list_tools method with all the function names
+    tools_list = ", ".join([f"self.{name}" for name in method_names])
+    list_tools_method = f"    def list_tools(self):\n        return [{tools_list}]\n"
     
     # Construct the class code
     class_code = (
-        "import requests\n\n"
-        "class APIClient:\n"
-        "    def __init__(self, base_url):\n"
+        "from agentr.application import APIApplication\n\n"
+        "class APIClient(APIApplication):\n"
+        "    def __init__(self, base_url, integration=None, **kwargs):\n"
+        "        super().__init__(name='api_client', integration=integration, **kwargs)\n"
         "        self.base_url = base_url\n\n" +
+        list_tools_method + "\n" +
         '\n\n'.join(methods)
     )
     return class_code
+
 
 def generate_method_code(path, method, operation):
     """
@@ -58,7 +87,11 @@ def generate_method_code(path, method, operation):
     """
     # Determine function name
     if 'operationId' in operation:
-        func_name = operation['operationId']
+        raw_name = operation['operationId']
+        # Clean invalid characters first
+        cleaned_name = raw_name.replace('.', '_').replace('-', '_')
+        # Then convert to snake_case
+        func_name = convert_to_snake_case(cleaned_name)
     else:
         # Generate name from path and method
         path_parts = path.strip('/').split('/')
@@ -108,17 +141,23 @@ def generate_method_code(path, method, operation):
     method_func = method.lower()
     if has_body:
         body_lines.append("    if body is not None:")
-        body_lines.append(f"        response = requests.{method_func}(url, params=query_params, json=body)")
+        body_lines.append(f"        response = self._{method_func}(url, body)")
         body_lines.append("    else:")
-        body_lines.append(f"        response = requests.{method_func}(url, params=query_params)")
+        body_lines.append(f"        response = self._{method_func}(url, {{}})")
     else:
-        body_lines.append(f"    response = requests.{method_func}(url, params=query_params)")
+        if method_func == "get" or method_func == "delete":
+            body_lines.append(f"    response = self._{method_func}(url, query_params)")
+        else:
+            body_lines.append(f"    response = self._{method_func}(url, {{}})")
     
     # Handle response
-    body_lines.append("    response.raise_for_status()")
-    body_lines.append("    return response.json()")
+    body_lines.append("    if hasattr(response, 'json'):")
+    body_lines.append("        return response.json()")
+    body_lines.append("    return response")
     
-    return signature + '\n' + '\n'.join(body_lines)
+    method_code = signature + '\n' + '\n'.join(body_lines)
+    return method_code, func_name  # Return both the code and the function name
+
 
 # Example usage
 if __name__ == "__main__":
