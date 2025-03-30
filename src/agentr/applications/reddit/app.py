@@ -63,47 +63,41 @@ class RedditApp(APIApplication):
         if not 1 <= limit <= 100:
              return f"Error: Invalid limit '{limit}'. Please use a value between 1 and 100."
 
-        try:
-            url = f"{self.base_api_url}/r/{subreddit}/top"
-            params = {
-                "limit": limit,
-                "t": timeframe
-            }
+        
+        url = f"{self.base_api_url}/r/{subreddit}/top"
+        params = {
+            "limit": limit,
+            "t": timeframe
+        }
+        
+        logger.info(f"Requesting top {limit} posts from r/{subreddit} for timeframe '{timeframe}'")
+        response = self._get(url, params=params)
+
+        data = response.json()
+        
+        if "error" in data:
+                logger.error(f"Reddit API error: {data['error']} - {data.get('message', '')}")
+                return f"Error from Reddit API: {data['error']} - {data.get('message', '')}"
+
+        posts = data.get("data", {}).get("children", [])
+        
+        if not posts:
+            return f"No top posts found in r/{subreddit} for the timeframe '{timeframe}'."
+
+        result_lines = [f"Top {len(posts)} posts from r/{subreddit} (timeframe: {timeframe}):\n"]
+        for i, post_container in enumerate(posts):
+            post = post_container.get("data", {})
+            title = post.get('title', 'No Title')
+            score = post.get('score', 0)
+            author = post.get('author', 'Unknown Author')
+            permalink = post.get('permalink', '')
+            full_url = f"https://www.reddit.com{permalink}" if permalink else "No Link"
             
-            logger.info(f"Requesting top {limit} posts from r/{subreddit} for timeframe '{timeframe}'")
-            response = self._get(url, params=params)
+            result_lines.append(f"{i+1}. \"{title}\" by u/{author} (Score: {score})")
+            result_lines.append(f"   Link: {full_url}")
 
-            data = response.json()
-            
-            if "error" in data:
-                 logger.error(f"Reddit API error: {data['error']} - {data.get('message', '')}")
-                 return f"Error from Reddit API: {data['error']} - {data.get('message', '')}"
+        return "\n".join(result_lines)
 
-            posts = data.get("data", {}).get("children", [])
-            
-            if not posts:
-                return f"No top posts found in r/{subreddit} for the timeframe '{timeframe}'."
-
-            result_lines = [f"Top {len(posts)} posts from r/{subreddit} (timeframe: {timeframe}):\n"]
-            for i, post_container in enumerate(posts):
-                post = post_container.get("data", {})
-                title = post.get('title', 'No Title')
-                score = post.get('score', 0)
-                author = post.get('author', 'Unknown Author')
-                permalink = post.get('permalink', '')
-                full_url = f"https://www.reddit.com{permalink}" if permalink else "No Link"
-                
-                result_lines.append(f"{i+1}. \"{title}\" by u/{author} (Score: {score})")
-                result_lines.append(f"   Link: {full_url}")
-
-            return "\n".join(result_lines)
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
 
     def search_subreddits(self, query: str, limit: int = 5, sort: str = "relevance") -> str:
         """Search for subreddits matching a query string.
@@ -123,54 +117,47 @@ class RedditApp(APIApplication):
         if not 1 <= limit <= 100:
              return f"Error: Invalid limit '{limit}'. Please use a value between 1 and 100."
 
-        try:
-            url = f"{self.base_api_url}/subreddits/search"
-            params = {
-                "q": query,
-                "limit": limit,
-                "sort": sort,
-                # Optionally include NSFW results? Defaulting to false for safety.
-                # "include_over_18": "false" 
-            }
+    
+        url = f"{self.base_api_url}/subreddits/search"
+        params = {
+            "q": query,
+            "limit": limit,
+            "sort": sort,
+            # Optionally include NSFW results? Defaulting to false for safety.
+            # "include_over_18": "false" 
+        }
+        
+        logger.info(f"Searching for subreddits matching '{query}' (limit: {limit}, sort: {sort})")
+        response = self._get(url, params=params)
+        
+        data = response.json()
+
+        if "error" in data:
+                logger.error(f"Reddit API error during subreddit search: {data['error']} - {data.get('message', '')}")
+                return f"Error from Reddit API during search: {data['error']} - {data.get('message', '')}"
+
+        subreddits = data.get("data", {}).get("children", [])
+        
+        if not subreddits:
+            return f"No subreddits found matching the query '{query}'."
+
+        result_lines = [f"Found {len(subreddits)} subreddits matching '{query}' (sorted by {sort}):\n"]
+        for i, sub_container in enumerate(subreddits):
+            sub_data = sub_container.get("data", {})
+            display_name = sub_data.get('display_name', 'N/A') # e.g., 'python'
+            title = sub_data.get('title', 'No Title') # Often the same as display_name or slightly longer
+            subscribers = sub_data.get('subscribers', 0)
+            # Use public_description if available, fallback to title
+            description = sub_data.get('public_description', '').strip() or title
             
-            logger.info(f"Searching for subreddits matching '{query}' (limit: {limit}, sort: {sort})")
-            response = self._get(url, params=params)
+            # Format subscriber count nicely
+            subscriber_str = f"{subscribers:,}" if subscribers else "Unknown"
             
-            data = response.json()
-
-            if "error" in data:
-                 logger.error(f"Reddit API error during subreddit search: {data['error']} - {data.get('message', '')}")
-                 return f"Error from Reddit API during search: {data['error']} - {data.get('message', '')}"
-
-            subreddits = data.get("data", {}).get("children", [])
+            result_lines.append(f"{i+1}. r/{display_name} ({subscriber_str} subscribers)")
+            if description:
+                result_lines.append(f"   Description: {description}")
             
-            if not subreddits:
-                return f"No subreddits found matching the query '{query}'."
-
-            result_lines = [f"Found {len(subreddits)} subreddits matching '{query}' (sorted by {sort}):\n"]
-            for i, sub_container in enumerate(subreddits):
-                sub_data = sub_container.get("data", {})
-                display_name = sub_data.get('display_name', 'N/A') # e.g., 'python'
-                title = sub_data.get('title', 'No Title') # Often the same as display_name or slightly longer
-                subscribers = sub_data.get('subscribers', 0)
-                # Use public_description if available, fallback to title
-                description = sub_data.get('public_description', '').strip() or title
-                
-                # Format subscriber count nicely
-                subscriber_str = f"{subscribers:,}" if subscribers else "Unknown"
-                
-                result_lines.append(f"{i+1}. r/{display_name} ({subscriber_str} subscribers)")
-                if description:
-                    result_lines.append(f"   Description: {description}")
-                
-            return "\n".join(result_lines)
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        return "\n".join(result_lines)
 
     def get_post_flairs(self, subreddit: str):
         """Retrieve the list of available post flairs for a specific subreddit.
@@ -181,24 +168,17 @@ class RedditApp(APIApplication):
         Returns:
             A list of dictionaries containing flair details, or an error message.
         """
-        try:
-            url = f"{self.base_api_url}/r/{subreddit}/api/link_flair_v2"
-            
-            logger.info(f"Fetching post flairs for subreddit: r/{subreddit}")
-            response = self._get(url)
+    
+        url = f"{self.base_api_url}/r/{subreddit}/api/link_flair_v2"
+        
+        logger.info(f"Fetching post flairs for subreddit: r/{subreddit}")
+        response = self._get(url)
 
-            flairs = response.json()
-            if not flairs:
-                return f"No post flairs available for r/{subreddit}."
+        flairs = response.json()
+        if not flairs:
+            return f"No post flairs available for r/{subreddit}."
 
-            return flairs
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        return flairs
             
     def create_post(self, subreddit: str, title: str, kind: str = "self", text: str = None, url: str = None, flair_id: str = None):
         """Create a new post in a specified subreddit.
@@ -237,27 +217,19 @@ class RedditApp(APIApplication):
         }
         data = {k: v for k, v in data.items() if v is not None}
 
-        try:
-            url_api = f"{self.base_api_url}/api/submit"
-            logger.info(f"Submitting a new post to r/{subreddit}")
-            response = self._post(url_api, data=data)
-            response_json = response.json()
+        url_api = f"{self.base_api_url}/api/submit"
+        logger.info(f"Submitting a new post to r/{subreddit}")
+        response = self._post(url_api, data=data)
+        response_json = response.json()
 
-            # Check for Reddit API errors in the response
-            if response_json and "json" in response_json and "errors" in response_json["json"]:
-                errors = response_json["json"]["errors"]
-                if errors:
-                    error_message = ", ".join([f"{code}: {message}" for code, message in errors])
-                    return f"Reddit API error: {error_message}"
+        # Check for Reddit API errors in the response
+        if response_json and "json" in response_json and "errors" in response_json["json"]:
+            errors = response_json["json"]["errors"]
+            if errors:
+                error_message = ", ".join([f"{code}: {message}" for code, message in errors])
+                return f"Reddit API error: {error_message}"
 
-            return response_json
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        return response_json
 
     def get_comment_by_id(self, comment_id: str) -> dict:
         """
@@ -274,23 +246,15 @@ class RedditApp(APIApplication):
         url = f"https://oauth.reddit.com/api/info.json?id={comment_id}"
 
         # Make the GET request to the Reddit API
-        try:
-          response = self._get(url)
+        
+        response = self._get(url)
 
-          data = response.json()
-          comments = data.get("data", {}).get("children", [])
-          if comments:
-              return comments[0]["data"]
-          else:
-              return {"error": "Comment not found."}
-
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        data = response.json()
+        comments = data.get("data", {}).get("children", [])
+        if comments:
+            return comments[0]["data"]
+        else:
+            return {"error": "Comment not found."}
         
     def post_comment(self, parent_id: str, text: str) -> dict:
         """
@@ -303,25 +267,17 @@ class RedditApp(APIApplication):
         Returns:
             A dictionary containing the response from the Reddit API, or an error message if posting fails.
         """
-        try:
-            url = f"{self.base_api_url}/api/comment"
-            data = {
-                "parent": parent_id,
-                "text": text,
-            }
+        
+        url = f"{self.base_api_url}/api/comment"
+        data = {
+            "parent": parent_id,
+            "text": text,
+        }
 
-            logger.info(f"Posting comment to {parent_id}")
-            response = self._post(url, data=data)
+        logger.info(f"Posting comment to {parent_id}")
+        response = self._post(url, data=data)
 
-            return response.json()
-
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        return response.json()
 
     def edit_content(self, content_id: str, text: str) -> dict:
         """
@@ -334,25 +290,18 @@ class RedditApp(APIApplication):
         Returns:
             A dictionary containing the response from the Reddit API, or an error message if editing fails.
         """
-        try:
-            url = f"{self.base_api_url}/api/editusertext"
-            data = {
-                "thing_id": content_id,
-                "text": text,
-            }
+      
+        url = f"{self.base_api_url}/api/editusertext"
+        data = {
+            "thing_id": content_id,
+            "text": text,
+        }
 
-            logger.info(f"Editing content {content_id}")
-            response = self._post(url, data=data)
+        logger.info(f"Editing content {content_id}")
+        response = self._post(url, data=data)
 
-            return response.json()
+        return response.json()
 
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
         
     def delete_content(self, content_id: str) -> dict:
         """
@@ -364,26 +313,18 @@ class RedditApp(APIApplication):
         Returns:
             A dictionary containing the response from the Reddit API, or an error message if deletion fails.
         """
-        try:
-            url = f"{self.base_api_url}/api/del"
-            data = {
-                "id": content_id,
-            }
+        
+        url = f"{self.base_api_url}/api/del"
+        data = {
+            "id": content_id,
+        }
 
-            logger.info(f"Deleting content {content_id}")
-            response = self._post(url, data=data)
+        logger.info(f"Deleting content {content_id}")
+        response = self._post(url, data=data)
 
-            # Reddit's delete endpoint returns an empty response on success.
-            # We'll just return a success message.
-            return {"message": f"Content {content_id} deleted successfully."}
-
-
-        except NotAuthorizedError as e:
-            return e.message
-        except httpx.HTTPStatusError as e:
-            return f"HTTP Error: {e.response.status_code} - {e.response.text or 'Reddit API Error'}"
-        except Exception as e:
-            return f"An unexpected error occurred: {type(e).__name__}"
+        # Reddit's delete endpoint returns an empty response on success.
+        # We'll just return a success message.
+        return {"message": f"Content {content_id} deleted successfully."}
 
     def list_tools(self):
         return [
