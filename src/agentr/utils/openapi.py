@@ -67,8 +67,8 @@ def generate_api_client(schema):
         "    def __init__(self, base_url, integration=None, **kwargs):\n"
         "        super().__init__(name='api_client', integration=integration, **kwargs)\n"
         "        self.base_url = base_url\n\n" +
-        list_tools_method + "\n" +
-        '\n\n'.join(methods)
+        '\n\n'.join(methods) + "\n\n" +
+        list_tools_method
     )
     return class_code
 
