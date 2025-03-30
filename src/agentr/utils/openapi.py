@@ -47,6 +47,25 @@ def generate_api_client(schema):
     methods = []
     method_names = []
     
+    # Extract API info for naming and base URL
+    info = schema.get('info', {})
+    api_title = info.get('title', 'API')
+    
+    # Get base URL from servers array if available
+    base_url = ""
+    servers = schema.get('servers', [])
+    if servers and isinstance(servers, list) and 'url' in servers[0]:
+        base_url = servers[0]['url'].rstrip('/')
+    
+    # Create a clean class name from API title
+    if api_title:
+        # Convert API title to a clean class name
+        base_name = "".join(word.capitalize() for word in api_title.split())
+        clean_name = ''.join(c for c in base_name if c.isalnum())
+        class_name = f"{clean_name}App"
+    else:
+        class_name = "APIClient"
+    
     # Iterate over paths and their operations
     for path, path_info in schema.get('paths', {}).items():
         for method in path_info:
@@ -57,18 +76,27 @@ def generate_api_client(schema):
                 method_names.append(func_name)
     
     # Generate list_tools method with all the function names
-    tools_list = ", ".join([f"self.{name}" for name in method_names])
-    list_tools_method = f"    def list_tools(self):\n        return [{tools_list}]\n"
+    tools_list = ",\n            ".join([f"self.{name}" for name in method_names])
+    list_tools_method = f"""    def list_tools(self):
+        return [
+            {tools_list}
+        ]"""
+    
+    # Generate class imports
+    imports = [
+        "from agentr.application import APIApplication",
+        "from agentr.integration import Integration"
+    ]
     
     # Construct the class code
     class_code = (
-        "from agentr.application import APIApplication\n\n"
-        "class APIClient(APIApplication):\n"
-        "    def __init__(self, base_url, integration=None, **kwargs):\n"
-        "        super().__init__(name='api_client', integration=integration, **kwargs)\n"
-        "        self.base_url = base_url\n\n" +
+        "\n".join(imports) + "\n\n"
+        f"class {class_name}(APIApplication):\n"
+        f"    def __init__(self, integration: Integration = None, **kwargs) -> None:\n"
+        f"        super().__init__(name='{class_name.lower()}', integration=integration, **kwargs)\n"
+        f"        self.base_url = \"{base_url}\"\n\n" +
         '\n\n'.join(methods) + "\n\n" +
-        list_tools_method
+        list_tools_method + "\n"
     )
     return class_code
 
