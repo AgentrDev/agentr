@@ -35,8 +35,8 @@ class APIApplication(Application):
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
-            logger.warning(f"Reddit authorization needed: {e.message}")
-            return e.message 
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
         except Exception as e:
             logger.error(f"Error getting {url}: {e}")
             raise e
@@ -49,8 +49,8 @@ class APIApplication(Application):
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
-            logger.warning(f"Reddit authorization needed: {e.message}")
-            return e.message 
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 429:
                 return e.response.text or "Rate limit exceeded. Please try again later."
@@ -67,8 +67,8 @@ class APIApplication(Application):
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
-            logger.warning(f"Reddit authorization needed: {e.message}")
-            return e.message 
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
         except Exception as e:
             logger.error(f"Error posting {url}: {e}")
             raise e
@@ -80,10 +80,11 @@ class APIApplication(Application):
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
-            logger.warning(f"Reddit authorization needed: {e.message}")
-            return e.message 
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
         except Exception as e:
             logger.error(f"Error posting {url}: {e}")
+            raise e
 
     def validate(self):
         pass
