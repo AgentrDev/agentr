@@ -2,6 +2,7 @@ import json
 import yaml
 import re
 from pathlib import Path
+from typing import Dict, Any
 
 
 def convert_to_snake_case(identifier: str) -> str:
@@ -111,14 +112,12 @@ def generate_method_code(path, method, operation):
         operation (dict): The operation details from the schema.
     
     Returns:
-        str: The Python code for the method.
+        tuple: (method_code, func_name) - The Python code for the method and its name.
     """
     # Determine function name
     if 'operationId' in operation:
         raw_name = operation['operationId']
-        # Clean invalid characters first
         cleaned_name = raw_name.replace('.', '_').replace('-', '_')
-        # Then convert to snake_case
         func_name = convert_to_snake_case(cleaned_name)
     else:
         # Generate name from path and method
@@ -143,48 +142,70 @@ def generate_method_code(path, method, operation):
             args.append(param['name'])
         else:
             args.append(f"{param['name']}=None")
+    
     if has_body:
-        args.append('body' if body_required else 'body=None')
-    signature = f"def {func_name}(self, {', '.join(args)}):"
+        args.append('request_body' if body_required else 'request_body=None')
+    
+    signature = f"    def {func_name}(self, {', '.join(args)}) -> Dict[str, Any]:"
     
     # Build method body
     body_lines = []
     
+    # Validate required parameters
+    for param in parameters:
+        if param.get('required', False):
+            body_lines.append(f"        if {param['name']} is None:")
+            body_lines.append(f"            raise ValueError(\"Missing required parameter '{param['name']}'\")")
+    
+    # Validate required body
+    if has_body and body_required:
+        body_lines.append("        if request_body is None:")
+        body_lines.append("            raise ValueError(\"Missing required request body\")")
+    
     # Path parameters
     path_params = [p for p in parameters if p['in'] == 'path']
     path_params_dict = ', '.join([f"'{p['name']}': {p['name']}" for p in path_params])
-    body_lines.append(f"    path_params = {{{path_params_dict}}}")
+    body_lines.append(f"        path_params = {{{path_params_dict}}}")
+    
+    # Format URL
+    body_lines.append(f"        url = f\"{{self.base_url}}{path}\".format_map(path_params)")
     
     # Query parameters
     query_params = [p for p in parameters if p['in'] == 'query']
     query_params_items = ', '.join([f"('{p['name']}', {p['name']})" for p in query_params])
     body_lines.append(
-        f"    query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
+        f"        query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
     )
     
-    # Format URL
-    body_lines.append(f"    url = f\"{{self.base_url}}{path}\".format_map(path_params)")
-    
-    # Make HTTP request
-    method_func = method.lower()
+    # Request body handling for JSON
     if has_body:
-        body_lines.append("    if body is not None:")
-        body_lines.append(f"        response = self._{method_func}(url, body)")
-        body_lines.append("    else:")
-        body_lines.append(f"        response = self._{method_func}(url, {{}})")
-    else:
-        if method_func == "get" or method_func == "delete":
-            body_lines.append(f"    response = self._{method_func}(url, query_params)")
+        body_lines.append("        json_body = request_body if request_body is not None else None")
+    
+    # Make HTTP request using the proper method
+    method_lower = method.lower()
+    if method_lower == 'get':
+        body_lines.append("        response = self._get(url, params=query_params)")
+    elif method_lower == 'post':
+        if has_body:
+            body_lines.append("        response = self._post(url, data=json_body)")
         else:
-            body_lines.append(f"    response = self._{method_func}(url, {{}})")
+            body_lines.append("        response = self._post(url, data={})")
+    elif method_lower == 'put':
+        if has_body:
+            body_lines.append("        response = self._put(url, data=json_body)")
+        else:
+            body_lines.append("        response = self._put(url, data={})")
+    elif method_lower == 'delete':
+        body_lines.append("        response = self._delete(url)")
+    else:
+        body_lines.append(f"        response = self._{method_lower}(url, data={{}})")
     
     # Handle response
-    body_lines.append("    if hasattr(response, 'json'):")
+    body_lines.append("        response.raise_for_status()")
     body_lines.append("        return response.json()")
-    body_lines.append("    return response")
     
     method_code = signature + '\n' + '\n'.join(body_lines)
-    return method_code, func_name  # Return both the code and the function name
+    return method_code, func_name
 
 
 # Example usage
