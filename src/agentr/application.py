@@ -1,5 +1,4 @@
-from abc import ABC, abstractmethod
-
+from abc import ABC
 from loguru import logger
 from agentr.exceptions import NotAuthorizedError
 from agentr.integration import Integration
@@ -11,11 +10,25 @@ class Application(ABC):
     """
     def __init__(self, name: str, **kwargs):
         self.name = name
+        self.tools = []
 
-    @abstractmethod
+    def tool(self):
+        """Decorator to register a method as a tool.
+        
+        This decorator adds the decorated method to the application's tools list
+        and returns the original method unchanged.
+        
+        Returns:
+            The decorated method
+        """
+        def decorator(func):
+            if func not in self.tools:
+                self.tools.append(func)
+            return func
+        return decorator
+    
     def list_tools(self):
-        pass
-
+        return self.tools
 
 class APIApplication(Application):
     """
@@ -100,8 +113,4 @@ class APIApplication(Application):
             raise e       
 
     def validate(self):
-        pass
-    
-    @abstractmethod
-    def list_tools(self):
         pass

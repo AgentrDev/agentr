@@ -80,7 +80,9 @@ class LocalServer(Server):
             if app:
                 tools = app.list_tools()
                 for tool in tools:
-                    self.add_tool(tool)
+                    name = app.name + "_" + tool.__name__
+                    description = tool.__doc__
+                    self.add_tool(tool, name=name, description=description)
 
                 
 
@@ -114,7 +116,9 @@ class AgentRServer(Server):
                 "X-API-KEY": self.api_key
             }
         )
+        response.raise_for_status()
         apps = response.json()
+        
         logger.info(f"Apps: {apps}")
         return [AppConfig.model_validate(app) for app in apps]
             
@@ -125,4 +129,6 @@ class AgentRServer(Server):
             if app:
                 tools = app.list_tools()
                 for tool in tools:
-                    self.add_tool(tool)
+                    name = app.name + "_" + tool.__name__
+                    description = tool.__doc__
+                    self.add_tool(tool, name=name, description=description)
