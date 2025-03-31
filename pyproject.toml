@@ -1,6 +1,6 @@
 [project]
 name = "agentr"
-version = "0.1.7"
+version = "0.1.8"
 description = "A python framework to build MCP servers"
 readme = "README.md"
 authors = [

@@ -1,8 +1,6 @@
 from agentr.application import APIApplication
 from agentr.integration import Integration
-from agentr.exceptions import NotAuthorizedError
 from loguru import logger
-import httpx 
 
 class RedditApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
@@ -13,11 +11,6 @@ class RedditApp(APIApplication):
         if not self.integration:
             raise ValueError("Integration not configured for RedditApp")
         credentials = self.integration.get_credentials()
-        if not credentials:
-            logger.warning("No Reddit credentials found via integration.")
-            action = self.integration.authorize()
-            raise NotAuthorizedError(action) 
-            
         if "access_token" not in credentials:
              logger.error("Reddit credentials found but missing 'access_token'.")
              raise ValueError("Invalid Reddit credentials format.")
@@ -26,24 +19,6 @@ class RedditApp(APIApplication):
             "Authorization": f"Bearer {credentials['access_token']}",
             "User-Agent": "agentr-reddit-app/0.1 by AgentR"
         }
-        
-    def _post(self, url, data):
-        try:
-            headers = self._get_headers()
-            response = httpx.post(url, headers=headers, data=data)
-            response.raise_for_status()
-            return response
-        except NotAuthorizedError as e:
-            logger.warning(f"Reddit authorization needed: {e.message}")
-            return e.message 
-        except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                return e.response.text or "Rate limit exceeded. Please try again later."
-            else:
-                raise e
-        except Exception as e:
-            logger.error(f"Error posting {url}: {e}")
-            raise e
     
     def get_subreddit_posts(self, subreddit: str, limit: int = 5, timeframe: str = "day") -> str:
         """Get the top posts from a specified subreddit over a given timeframe.
@@ -321,6 +296,7 @@ class RedditApp(APIApplication):
 
         logger.info(f"Deleting content {content_id}")
         response = self._post(url, data=data)
+        response.raise_for_status()
 
         # Reddit's delete endpoint returns an empty response on success.
         # We'll just return a success message.
