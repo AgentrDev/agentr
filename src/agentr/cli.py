@@ -59,6 +59,8 @@ def install(app_name: str):
         
         with open(config_path, 'r') as f:
             config = json.load(f)
+        if 'mcpServers' not in config:
+            config['mcpServers'] = {}
         config['mcpServers']['agentr'] = {
             "command": "uvx",
             "args": ["agentr@latest", "run"],
@@ -66,6 +68,35 @@ def install(app_name: str):
                 "AGENTR_API_KEY": api_key
             }
         }
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+        typer.echo("App installed successfully")
+    elif app_name == "cursor":
+        typer.echo(f"Installing mcp server for: {app_name}")
+        
+        # Set up Cursor config path
+        config_path = Path.home() / ".cursor/mcp.json"
+        
+        # Create config directory if it doesn't exist
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Create or load existing config
+        if config_path.exists():
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+        else:
+            config = {}
+
+        if 'mcpServers' not in config:
+            config['mcpServers'] = {}
+        config['mcpServers']['agentr'] = {
+            "command": "uvx",
+            "args": ["agentr@latest", "run"],
+            "env": {
+                "AGENTR_API_KEY": api_key
+            }
+        }
+        
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
         typer.echo("App installed successfully")
