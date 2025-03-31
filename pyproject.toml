@@ -1,12 +1,7 @@
 [project]
 name = "agentr"
-<<<<<<< Updated upstream
-version = "0.1.7"
-description = "A python framework to build MCP servers"
-=======
 version = "0.1.8"
 description = "An MCP middleware to connect to 400+ apps"
->>>>>>> Stashed changes
 readme = "README.md"
 authors = [
     { name = "Manoj Bajaj", email = "manoj@agentr.dev" }

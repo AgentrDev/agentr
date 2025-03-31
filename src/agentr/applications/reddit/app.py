@@ -1,28 +1,31 @@
 import httpx
 from agentr.application import APIApplication
-from agentr.exceptions import NotAuthorizedError
 from agentr.integration import Integration
+from loguru import logger
 
 class RedditApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
         super().__init__(name="reddit", integration=integration)
+        self.base_api_url = "https://oauth.reddit.com"
 
-    def _get_headers(self):
-        credentials = self.integration.get_credentials()
-        if "headers" in credentials:
-            return credentials["headers"]
-        return {
-            "Authorization": f"Bearer {credentials['access_token']}",
-<<<<<<< Updated upstream
-=======
-            "User-Agent": "agentr-reddit-app/0.1 by AgentR"
-        }
-    
     def _post(self, url, data):
         headers = self._get_headers()
         response = httpx.post(url, headers=headers, data=data)
         response.raise_for_status()
         return response
+
+    def _get_headers(self):
+        if not self.integration:
+            raise ValueError("Integration not configured for RedditApp")
+        credentials = self.integration.get_credentials()
+        if "access_token" not in credentials:
+             logger.error("Reddit credentials found but missing 'access_token'.")
+             raise ValueError("Invalid Reddit credentials format.")
+
+        return {
+            "Authorization": f"Bearer {credentials['access_token']}",
+            "User-Agent": "agentr-reddit-app/0.1 by AgentR"
+        }
     
     def get_subreddit_posts(self, subreddit: str, limit: int = 5, timeframe: str = "day") -> str:
         """Get the top posts from a specified subreddit over a given timeframe.
@@ -251,20 +254,63 @@ class RedditApp(APIApplication):
         data = {
             "parent": parent_id,
             "text": text,
->>>>>>> Stashed changes
         }
 
-    def get_subreddit_posts(self, subreddit: str) -> str:
-        """Get the latest posts from a subreddit
-        
+        logger.info(f"Posting comment to {parent_id}")
+        response = self._post(url, data=data)
+
+        return response.json()
+
+    def edit_content(self, content_id: str, text: str) -> dict:
+        """
+        Edit the text content of a Reddit post or comment.
+
         Args:
-            subreddit: The subreddit to get posts from
-            
+            content_id: The full ID of the content to edit (e.g., 't3_abc123' for a post, 't1_def456' for a comment).
+            text: The new text content.
+
         Returns:
-            A list of posts from the subreddit
+            A dictionary containing the response from the Reddit API, or an error message if editing fails.
+        """
+      
+        url = f"{self.base_api_url}/api/editusertext"
+        data = {
+            "thing_id": content_id,
+            "text": text,
+        }
+
+        logger.info(f"Editing content {content_id}")
+        response = self._post(url, data=data)
+
+        return response.json()
+
+        
+    def delete_content(self, content_id: str) -> dict:
+        """
+        Delete a Reddit post or comment.
+
+        Args:
+            content_id: The full ID of the content to delete (e.g., 't3_abc123' for a post, 't1_def456' for a comment).
+
+        Returns:
+            A dictionary containing the response from the Reddit API, or an error message if deletion fails.
         """
         
+        url = f"{self.base_api_url}/api/del"
+        data = {
+            "id": content_id,
+        }
+
+        logger.info(f"Deleting content {content_id}")
+        response = self._post(url, data=data)
+        response.raise_for_status()
+
+        # Reddit's delete endpoint returns an empty response on success.
+        # We'll just return a success message.
+        return {"message": f"Content {content_id} deleted successfully."}
 
     def list_tools(self):
-        return []
-    
+        return [
+            self.get_subreddit_posts,  self.search_subreddits,   self.get_post_flairs,   self.create_post,
+            self.get_comment_by_id,  self.post_comment,  self.edit_content,  self.delete_content
+        ]
