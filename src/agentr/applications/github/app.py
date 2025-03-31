@@ -1,6 +1,7 @@
 from agentr.integration import Integration
 from agentr.application import APIApplication
 from loguru import logger
+from typing import List, Dict, Any
 
 class GithubApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
@@ -125,40 +126,38 @@ class GithubApp(APIApplication):
         
         return result
 
-    def list_issues(self, repo_full_name: str, per_page: int = 30, page: int = 1) -> str:
+    def list_issues(self, repo_full_name: str, state: str = "open", assignee: str = None, 
+                    labels: str = None, per_page: int = 30, page: int = 1) -> List[Dict[str, Any]]:
         """List issues for a GitHub repository
         
         Args:
             repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            state: State of issues to return (open, closed, all). Default: open
+            assignee: Filter by assignee. Use 'none' for no assignee, '*' for any assignee
+            labels: Comma-separated list of label names (e.g. "bug,ui,@high")
             per_page: The number of results per page (max 100)
             page: The page number of the results to fetch
             
         Returns:
-            A formatted list of issues
+             The complete GitHub API response
         """
         repo_full_name = repo_full_name.strip()
-        url = f"{self.base_api_url}/{repo_full_name}/issues/events"
+        url = f"{self.base_api_url}/{repo_full_name}/issues"
+        
         params = {
+            "state": state,
             "per_page": per_page,
             "page": page
         }
+        
+        if assignee:
+            params["assignee"] = assignee
+        if labels:
+            params["labels"] = labels
+        
         response = self._get(url, params=params)
         response.raise_for_status()
-        
-        issues = response.json()
-        if not issues:
-            return f"No issues found for repository {repo_full_name}"
-        
-        result = f"Issues for {repo_full_name} (Page {page}):\n\n"
-        for issue in issues:
-            issue_title = issue.get("issue", {}).get("title", "No Title")
-            issue_number = issue.get("issue", {}).get("number", "Unknown")
-            issue_state = issue.get("issue", {}).get("state", "Unknown")
-            issue_user = issue.get("issue", {}).get("user", {}).get("login", "Unknown")
-            
-            result += f"- Issue #{issue_number}: {issue_title} (by {issue_user}, Status: {issue_state})\n"
-        
-        return result
+        return response.json()
 
     def get_pull_request(self, repo_full_name: str, pull_number: int) -> str:
         """Get a specific pull request for a GitHub repository
