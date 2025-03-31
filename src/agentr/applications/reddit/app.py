@@ -1,6 +1,7 @@
 import httpx
 from agentr.application import APIApplication
 from agentr.integration import Integration
+from agentr.exceptions import NotAuthorizedError
 from loguru import logger
 
 class RedditApp(APIApplication):
@@ -9,10 +10,22 @@ class RedditApp(APIApplication):
         self.base_api_url = "https://oauth.reddit.com"
 
     def _post(self, url, data):
-        headers = self._get_headers()
-        response = httpx.post(url, headers=headers, data=data)
-        response.raise_for_status()
-        return response
+        try:
+            headers = self._get_headers()
+            response = httpx.post(url, headers=headers, data=data)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 429:
+                return e.response.text or "Rate limit exceeded. Please try again later."
+            else:
+                raise e
+        except Exception as e:
+            logger.error(f"Error posting {url}: {e}")
+            raise e
 
     def _get_headers(self):
         if not self.integration:
