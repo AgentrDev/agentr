@@ -1,6 +1,7 @@
 from agentr.integration import Integration
 from agentr.application import APIApplication
 from loguru import logger
+from typing import List, Dict, Any
 
 class GithubApp(APIApplication):
     def __init__(self, integration: Integration) -> None:
@@ -125,40 +126,38 @@ class GithubApp(APIApplication):
         
         return result
 
-    def list_issues(self, repo_full_name: str, per_page: int = 30, page: int = 1) -> str:
+    def list_issues(self, repo_full_name: str, state: str = "open", assignee: str = None, 
+                    labels: str = None, per_page: int = 30, page: int = 1) -> List[Dict[str, Any]]:
         """List issues for a GitHub repository
         
         Args:
             repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            state: State of issues to return (open, closed, all). Default: open
+            assignee: Filter by assignee. Use 'none' for no assignee, '*' for any assignee
+            labels: Comma-separated list of label names (e.g. "bug,ui,@high")
             per_page: The number of results per page (max 100)
             page: The page number of the results to fetch
             
         Returns:
-            A formatted list of issues
+             The complete GitHub API response
         """
         repo_full_name = repo_full_name.strip()
-        url = f"{self.base_api_url}/{repo_full_name}/issues/events"
+        url = f"{self.base_api_url}/{repo_full_name}/issues"
+        
         params = {
+            "state": state,
             "per_page": per_page,
             "page": page
         }
+        
+        if assignee:
+            params["assignee"] = assignee
+        if labels:
+            params["labels"] = labels
+        
         response = self._get(url, params=params)
         response.raise_for_status()
-        
-        issues = response.json()
-        if not issues:
-            return f"No issues found for repository {repo_full_name}"
-        
-        result = f"Issues for {repo_full_name} (Page {page}):\n\n"
-        for issue in issues:
-            issue_title = issue.get("issue", {}).get("title", "No Title")
-            issue_number = issue.get("issue", {}).get("number", "Unknown")
-            issue_state = issue.get("issue", {}).get("state", "Unknown")
-            issue_user = issue.get("issue", {}).get("user", {}).get("login", "Unknown")
-            
-            result += f"- Issue #{issue_number}: {issue_title} (by {issue_user}, Status: {issue_state})\n"
-        
-        return result
+        return response.json()
 
     def get_pull_request(self, repo_full_name: str, pull_number: int) -> str:
         """Get a specific pull request for a GitHub repository
@@ -191,45 +190,47 @@ class GithubApp(APIApplication):
         
         return result
 
-    def create_pull_request(self, repo_full_name: str, title: str, head: str, base: str, body: str = "", 
-                            maintainer_can_modify: bool = True, draft: bool = False) -> str:
+    def create_pull_request(self, repo_full_name: str, head: str, base: str, title: str = None,
+                           body: str = None, issue: int = None, maintainer_can_modify: bool = True, 
+                           draft: bool = False) -> Dict[str, Any]:
         """Create a new pull request for a GitHub repository
         
         Args:
             repo_full_name: The full name of the repository (e.g. 'owner/repo')
-            title: The title of the new pull request
             head: The name of the branch where your changes are implemented
             base: The name of the branch you want the changes pulled into
+            title: The title of the new pull request (required if issue is not specified)
             body: The contents of the pull request
+            issue: An issue number to convert to a pull request. If specified, the issue's 
+                   title, body, and comments will be used for the pull request
             maintainer_can_modify: Indicates whether maintainers can modify the pull request
             draft: Indicates whether the pull request is a draft
             
         Returns:
-            A confirmation message with the new pull request details
+            The complete GitHub API response
         """
         repo_full_name = repo_full_name.strip()
         url = f"{self.base_api_url}/{repo_full_name}/pulls"
         
         pull_request_data = {
-            "title": title,
             "head": head,
             "base": base,
-            "body": body,
             "maintainer_can_modify": maintainer_can_modify,
             "draft": draft
         }
         
+        if issue is not None:
+            pull_request_data["issue"] = issue
+        else:
+            if title is None:
+                raise ValueError("Either 'title' or 'issue' must be specified")
+            pull_request_data["title"] = title
+            if body is not None:
+                pull_request_data["body"] = body
+        
         response = self._post(url, pull_request_data)
         response.raise_for_status()
-        
-        pr = response.json()
-        pr_number = pr.get("number", "Unknown")
-        pr_url = pr.get("html_url", "")
-        
-        return f"Successfully created pull request #{pr_number}:\n" \
-               f"Title: {title}\n" \
-               f"From: {head} → To: {base}\n" \
-               f"URL: {pr_url}"
+        return response.json()
 
     def create_issue(self, repo_full_name: str, title: str, body: str = "", labels = None) -> str:
         """Create a new issue in a GitHub repository
@@ -313,7 +314,43 @@ class GithubApp(APIApplication):
         
         return result
 
+    def update_issue(self, repo_full_name: str, issue_number: int, title: str = None, 
+                    body: str = None, assignee: str = None, state: str = None, 
+                    state_reason: str = None) -> Dict[str, Any]:
+        """Update an issue in a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            issue_number: The number that identifies the issue
+            title: The title of the issue
+            body: The contents of the issue
+            assignee: Username to assign to this issue
+            state: State of the issue (open or closed)
+            state_reason: Reason for state change (completed, not_planned, reopened, null)
+            
+        Returns:
+             The complete GitHub API response
+        """
+        url = f"{self.base_api_url}/{repo_full_name}/issues/{issue_number}"
+        
+        update_data = {}
+        if title is not None:
+            update_data["title"] = title
+        if body is not None:
+            update_data["body"] = body
+        if assignee is not None:
+            update_data["assignee"] = assignee
+        if state is not None:
+            update_data["state"] = state
+        if state_reason is not None:
+            update_data["state_reason"] = state_reason
+        
+        response = self._patch(url, update_data)
+        response.raise_for_status()
+        return response.json()
+
     def list_tools(self):
         return [self.star_repository, self.list_commits, self.list_branches, 
                 self.list_pull_requests, self.list_issues, self.get_pull_request, 
-                self.create_pull_request, self.create_issue, self.list_repo_activities]
+                self.create_pull_request, self.create_issue, self.update_issue,
+                self.list_repo_activities]
