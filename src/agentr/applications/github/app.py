@@ -190,45 +190,47 @@ class GithubApp(APIApplication):
         
         return result
 
-    def create_pull_request(self, repo_full_name: str, title: str, head: str, base: str, body: str = "", 
-                            maintainer_can_modify: bool = True, draft: bool = False) -> str:
+    def create_pull_request(self, repo_full_name: str, head: str, base: str, title: str = None,
+                           body: str = None, issue: int = None, maintainer_can_modify: bool = True, 
+                           draft: bool = False) -> Dict[str, Any]:
         """Create a new pull request for a GitHub repository
         
         Args:
             repo_full_name: The full name of the repository (e.g. 'owner/repo')
-            title: The title of the new pull request
             head: The name of the branch where your changes are implemented
             base: The name of the branch you want the changes pulled into
+            title: The title of the new pull request (required if issue is not specified)
             body: The contents of the pull request
+            issue: An issue number to convert to a pull request. If specified, the issue's 
+                   title, body, and comments will be used for the pull request
             maintainer_can_modify: Indicates whether maintainers can modify the pull request
             draft: Indicates whether the pull request is a draft
             
         Returns:
-            A confirmation message with the new pull request details
+            The complete GitHub API response
         """
         repo_full_name = repo_full_name.strip()
         url = f"{self.base_api_url}/{repo_full_name}/pulls"
         
         pull_request_data = {
-            "title": title,
             "head": head,
             "base": base,
-            "body": body,
             "maintainer_can_modify": maintainer_can_modify,
             "draft": draft
         }
         
+        if issue is not None:
+            pull_request_data["issue"] = issue
+        else:
+            if title is None:
+                raise ValueError("Either 'title' or 'issue' must be specified")
+            pull_request_data["title"] = title
+            if body is not None:
+                pull_request_data["body"] = body
+        
         response = self._post(url, pull_request_data)
         response.raise_for_status()
-        
-        pr = response.json()
-        pr_number = pr.get("number", "Unknown")
-        pr_url = pr.get("html_url", "")
-        
-        return f"Successfully created pull request #{pr_number}:\n" \
-               f"Title: {title}\n" \
-               f"From: {head} → To: {base}\n" \
-               f"URL: {pr_url}"
+        return response.json()
 
     def create_issue(self, repo_full_name: str, title: str, body: str = "", labels = None) -> str:
         """Create a new issue in a GitHub repository
