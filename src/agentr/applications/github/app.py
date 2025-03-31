@@ -312,7 +312,43 @@ class GithubApp(APIApplication):
         
         return result
 
+    def update_issue(self, repo_full_name: str, issue_number: int, title: str = None, 
+                    body: str = None, assignee: str = None, state: str = None, 
+                    state_reason: str = None) -> Dict[str, Any]:
+        """Update an issue in a GitHub repository
+        
+        Args:
+            repo_full_name: The full name of the repository (e.g. 'owner/repo')
+            issue_number: The number that identifies the issue
+            title: The title of the issue
+            body: The contents of the issue
+            assignee: Username to assign to this issue
+            state: State of the issue (open or closed)
+            state_reason: Reason for state change (completed, not_planned, reopened, null)
+            
+        Returns:
+             The complete GitHub API response
+        """
+        url = f"{self.base_api_url}/{repo_full_name}/issues/{issue_number}"
+        
+        update_data = {}
+        if title is not None:
+            update_data["title"] = title
+        if body is not None:
+            update_data["body"] = body
+        if assignee is not None:
+            update_data["assignee"] = assignee
+        if state is not None:
+            update_data["state"] = state
+        if state_reason is not None:
+            update_data["state_reason"] = state_reason
+        
+        response = self._patch(url, update_data)
+        response.raise_for_status()
+        return response.json()
+
     def list_tools(self):
         return [self.star_repository, self.list_commits, self.list_branches, 
                 self.list_pull_requests, self.list_issues, self.get_pull_request, 
-                self.create_pull_request, self.create_issue, self.list_repo_activities]
+                self.create_pull_request, self.create_issue, self.update_issue,
+                self.list_repo_activities]

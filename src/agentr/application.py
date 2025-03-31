@@ -72,6 +72,7 @@ class APIApplication(Application):
         except Exception as e:
             logger.error(f"Error posting {url}: {e}")
             raise e
+           
 
     def _delete(self, url):
         try:
@@ -84,6 +85,19 @@ class APIApplication(Application):
             raise e
         except Exception as e:
             logger.error(f"Error posting {url}: {e}")
+            raise e
+
+    def _patch(self, url, data):
+        try:
+            headers = self._get_headers()
+            response = httpx.patch(url, headers=headers, json=data)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
+        except Exception as e:
+            logger.error(f"Error patching {url}: {e}")
             raise e
 
     def validate(self):
