@@ -1,5 +1,5 @@
-from agentr.application import APIApplication
-from agentr.integration import Integration
+from agentr.applications.application import APIApplication
+from agentr.integrations import Integration
 from agentr.exceptions import NotAuthorizedError
 from loguru import logger
 import base64

@@ -2,7 +2,6 @@ import json
 import yaml
 import re
 from pathlib import Path
-from typing import Dict, Any
 
 
 def convert_to_snake_case(identifier: str) -> str:
@@ -85,8 +84,9 @@ def generate_api_client(schema):
     
     # Generate class imports
     imports = [
-        "from agentr.application import APIApplication",
-        "from agentr.integration import Integration"
+        "from agentr.applications import APIApplication",
+        "from agentr.integrations import Integration",
+        "from typing import Any, Dict"
     ]
     
     # Construct the class code

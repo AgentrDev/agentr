@@ -1,8 +1,7 @@
-from abc import ABC, abstractmethod
-
+from abc import ABC
 from loguru import logger
 from agentr.exceptions import NotAuthorizedError
-from agentr.integration import Integration
+from agentr.integrations import Integration
 import httpx
 
 class Application(ABC):
@@ -11,11 +10,10 @@ class Application(ABC):
     """
     def __init__(self, name: str, **kwargs):
         self.name = name
+        self.tools = []
 
-    @abstractmethod
     def list_tools(self):
-        pass
-
+        return self.tools
 
 class APIApplication(Application):
     """
@@ -42,10 +40,10 @@ class APIApplication(Application):
             raise e
 
     
-    def _post(self, url, data):
+    def _post(self, url, data, params=None):
         try:
             headers = self._get_headers()
-            response = httpx.post(url, headers=headers, json=data)
+            response = httpx.post(url, headers=headers, json=data, params=params)
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
@@ -60,10 +58,10 @@ class APIApplication(Application):
             logger.error(f"Error posting {url}: {e}")
             raise e
 
-    def _put(self, url, data):
+    def _put(self, url, data, params=None):
         try:
             headers = self._get_headers()
-            response = httpx.put(url, headers=headers, json=data)
+            response = httpx.put(url, headers=headers, json=data, params=params)
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
@@ -73,10 +71,10 @@ class APIApplication(Application):
             logger.error(f"Error posting {url}: {e}")
             raise e
 
-    def _delete(self, url):
+    def _delete(self, url, params=None):
         try:
             headers = self._get_headers()
-            response = httpx.delete(url, headers=headers)
+            response = httpx.delete(url, headers=headers, params=params)
             response.raise_for_status()
             return response
         except NotAuthorizedError as e:
@@ -85,10 +83,19 @@ class APIApplication(Application):
         except Exception as e:
             logger.error(f"Error posting {url}: {e}")
             raise e
+
+    def _patch(self, url, data, params=None):
+        try:
+            headers = self._get_headers()
+            response = httpx.patch(url, headers=headers, json=data, params=params)
+            response.raise_for_status()
+            return response
+        except NotAuthorizedError as e:
+            logger.warning(f"Authorization needed: {e.message}")
+            raise e
+        except Exception as e:
+            logger.error(f"Error patching {url}: {e}")
+            raise e       
 
     def validate(self):
-        pass
-    
-    @abstractmethod
-    def list_tools(self):
         pass

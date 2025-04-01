@@ -5,6 +5,7 @@ from agentr.applications.google_calendar.app import GoogleCalendarApp
 from agentr.applications.google_mail.app import GmailApp
 from agentr.applications.resend.app import ResendApp
 from agentr.applications.reddit.app import RedditApp
+from agentr.applications.application import Application, APIApplication
 
 def app_from_name(name: str):
     name = name.lower().strip()
@@ -25,3 +26,6 @@ def app_from_name(name: str):
         return RedditApp
     else:
         raise ValueError(f"App {name} not found")
+
+
+__all__ = ["app_from_name", "Application", "APIApplication"]

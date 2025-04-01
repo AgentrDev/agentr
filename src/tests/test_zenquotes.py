@@ -1,5 +1,4 @@
-from loguru import logger
-from agentr.server import LocalServer
+from agentr.servers.server import LocalServer
 import pytest
 
 @pytest.mark.asyncio
@@ -16,9 +15,8 @@ async def test_zenquotes():
     # List available tools
     tools = await server.list_tools()
     assert len(tools) > 0
-    
     # Get a random quote
-    result = await server.call_tool("get_quote", {})
+    result = await server.call_tool("zenquotes_get_quote", {})
     assert len(result) > 0
     quote = result[0].text
     assert quote is not None

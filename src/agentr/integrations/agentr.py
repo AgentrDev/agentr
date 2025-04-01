@@ -1,4 +1,4 @@
-from agentr.integrations.base import Integration
+from agentr.integrations.integration import Integration
 import os
 import httpx
 from loguru import logger
