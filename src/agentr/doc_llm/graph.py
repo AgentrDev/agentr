@@ -10,10 +10,11 @@ from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
 
-from doc_llm.configuration import Configuration
-from doc_llm.prompts import SYSTEM_PROMPT, DOCSTRING_PROMPT
-from doc_llm.state import DocstringOutput, InputState, OutputState, State
-from doc_llm.utils import load_chat_model, extract_functions_from_script
+# Check the paths
+from .configuration import Configuration
+from .prompts import SYSTEM_PROMPT, DOCSTRING_PROMPT
+from .state import DocstringOutput, InputState, OutputState, State
+from .utils import load_chat_model, extract_functions_from_script
 
 async def init_node(state: State, config: RunnableConfig) -> Command[Literal["llm_node"]]:
     """Initialize the agent state with extracted functions from the target script.
