@@ -1,4 +1,4 @@
-from agentr.application import APIApplication
+from agentr.applications.application import APIApplication
 
 
 class ZenQuoteApp(APIApplication):

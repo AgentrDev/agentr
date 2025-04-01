@@ -1,9 +1,7 @@
-from agentr.application import APIApplication
-from agentr.integration import Integration
-from agentr.exceptions import NotAuthorizedError
+from agentr.applications.application import APIApplication
+from agentr.integrations import Integration
 from loguru import logger
 from datetime import datetime, timedelta
-from urllib.parse import urlencode
 
 class GoogleCalendarApp(APIApplication):
     def __init__(self, integration: Integration) -> None:

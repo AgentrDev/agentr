@@ -5,11 +5,6 @@ import sys
 app = typer.Typer()
 
 @app.command()
-def version():
-    """Show the version of the CLI"""
-    print("agentr version 0.1.0")
-
-@app.command()
 def generate(schema_path: Path = typer.Option(..., "--schema", "-s")):
     """Generate API client from OpenAPI schema"""
     if not schema_path.exists():
@@ -28,19 +23,30 @@ def generate(schema_path: Path = typer.Option(..., "--schema", "-s")):
 @app.command()
 def run():
     """Run the MCP server"""
-    from agentr.server import AgentRServer
+    from agentr.servers.server import AgentRServer
     mcp = AgentRServer(name="AgentR Server", description="AgentR Server")
     mcp.run()
 
 @app.command()
-def install(app_name: str):
+def install(app_name: str = typer.Argument(..., help="Name of app to install")):
     """Install an app"""
+    # List of supported apps
+    supported_apps = ["claude", "cursor"]
+    
+    if app_name not in supported_apps:
+        typer.echo("Available apps:")
+        for app in supported_apps:
+            typer.echo(f"  - {app}")
+        typer.echo(f"\nApp '{app_name}' not supported")
+        raise typer.Exit(1)
+
     import json
 
     # Print instructions before asking for API key
     typer.echo("╭─ Instruction ─────────────────────────────────────────────────────────────────╮")
     typer.echo("│ API key is required. Visit https://agentr.dev to create an API key.           │")
     typer.echo("╰───────────────────────────────────────────────────────────────────────────────╯")
+    
     # Prompt for API key
     api_key = typer.prompt("Enter your AgentR API key", hide_input=True)
 
@@ -100,8 +106,6 @@ def install(app_name: str):
         with open(config_path, 'w') as f:
             json.dump(config, f, indent=4)
         typer.echo("App installed successfully")
-    else:
-        typer.echo(f"App {app_name} not supported")
 
 if __name__ == "__main__":
     app()

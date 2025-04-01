@@ -3,8 +3,8 @@ import httpx
 from mcp.server.fastmcp import FastMCP
 from agentr.applications import app_from_name
 from agentr.exceptions import NotAuthorizedError
-from agentr.integration import AgentRIntegration, ApiKeyIntegration
-from agentr.store import EnvironmentStore, MemoryStore
+from agentr.integrations import AgentRIntegration, ApiKeyIntegration
+from agentr.stores.store import EnvironmentStore, MemoryStore
 from agentr.config import AppConfig, IntegrationConfig, StoreConfig
 from loguru import logger
 import os

@@ -1,5 +1,5 @@
-from agentr.integration import Integration
-from agentr.application import APIApplication
+from agentr.integrations import Integration
+from agentr.applications.application import APIApplication
 from loguru import logger
 from typing import List, Dict, Any
 
@@ -19,7 +19,6 @@ class GithubApp(APIApplication):
             "Accept": "application/vnd.github.v3+json"
         }
     
-
     def star_repository(self, repo_full_name: str) -> str:
         """Star a GitHub repository
         
@@ -126,8 +125,7 @@ class GithubApp(APIApplication):
         
         return result
 
-    def list_issues(self, repo_full_name: str, state: str = "open", assignee: str = None, 
-                    labels: str = None, per_page: int = 30, page: int = 1) -> List[Dict[str, Any]]:
+    def list_issues(self, repo_full_name: str, state: str = "open", assignee: str = None, labels: str = None, per_page: int = 30, page: int = 1) -> List[Dict[str, Any]]:
         """List issues for a GitHub repository
         
         Args:
