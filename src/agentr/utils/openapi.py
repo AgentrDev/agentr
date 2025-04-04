@@ -174,15 +174,23 @@ def generate_method_code(path, method, operation):
     body_required = has_body and operation['requestBody'].get('required', False)
     
     # Build function arguments
-    args = []
+    required_args = []
+    optional_args = []
     for param in parameters:
         if param.get('required', False):
-            args.append(param['name'])
+            required_args.append(param['name'])
         else:
-            args.append(f"{param['name']}=None")
+            optional_args.append(f"{param['name']}=None")
     
+    # Add request body parameter
     if has_body:
-        args.append('request_body' if body_required else 'request_body=None')
+        if body_required:
+            required_args.append('request_body')
+        else:
+            optional_args.append('request_body=None')
+    
+    # Combine required and optional arguments
+    args = required_args + optional_args
     
     # Determine return type
     return_type = determine_return_type(operation)
