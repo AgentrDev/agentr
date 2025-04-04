@@ -9,6 +9,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.graph import StateGraph
 from langgraph.prebuilt import ToolNode
 from langgraph.types import Command
+import asyncio
 
 # Check the paths
 from react_agent.configuration import Configuration
@@ -29,14 +30,15 @@ async def init_node(state: State, config: RunnableConfig) -> Command[Literal["ll
     configuration = Configuration.from_runnable_config(config)
     
     # Extract the target script path
-    target_script_path = ("/home/draken/Desktop/docstring/src/react_agent/app.py")
+    target_script_path = ("/home/draken/Desktop/new_doc/src/react_agent/pet.py")
     
     # Read the original script
-    with open(target_script_path, "r") as file:
-        original_script = file.read()
-    
-    # Extract functions from the script
-    extracted_functions = extract_functions_from_script(target_script_path)
+    # Read the original script asynchronously
+    original_script = await asyncio.to_thread(lambda: open(target_script_path, "r").read())
+
+    # Extract functions asynchronously (if the function is blocking)
+    extracted_functions = await asyncio.to_thread(extract_functions_from_script, target_script_path)
+
     
     return Command(
         update={
@@ -202,7 +204,7 @@ async def tool_node(state: State, config: RunnableConfig) -> Command[Literal["ll
     
     if is_last_function:
         
-        target_script_path = "/home/draken/Desktop/docstring/src/react_agent/app.py"         #hardcoded output path
+        target_script_path = "/home/draken/Desktop/new_doc/src/react_agent/pet.py"         #hardcoded output path
         
         file_dir = os.path.dirname(target_script_path)
         file_name = os.path.basename(target_script_path)
@@ -210,11 +212,11 @@ async def tool_node(state: State, config: RunnableConfig) -> Command[Literal["ll
         new_file_name = f"{file_name_without_ext}_new{ext}"
         new_file_path = os.path.join(file_dir, new_file_name)
         
-        # Save the updated script to the new file
-        with open(new_file_path, "w") as file:
-            file.write(updated_script)
-        
-        print(f"Updated script saved to: {new_file_path}")
+            # Save the updated script asynchronously
+        async def write_file_async(path, content):
+            await asyncio.to_thread(lambda: open(path, "w").write(content))
+
+        await write_file_async(new_file_path, updated_script)
     
     return Command(
         update={
