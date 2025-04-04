@@ -213,10 +213,13 @@ def generate_method_code(path, method, operation):
     
     # Query parameters
     query_params = [p for p in parameters if p['in'] == 'query']
-    query_params_items = ', '.join([f"('{p['name']}', {p['name']})" for p in query_params])
-    body_lines.append(
-        f"        query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
-    )
+    if query_params:
+        query_params_items = ', '.join([f"('{p['name']}', {p['name']})" for p in query_params])
+        body_lines.append(
+            f"        query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
+        )
+    else:
+        body_lines.append("        query_params = {}")
     
     # Request body handling for JSON
     if has_body:
@@ -228,18 +231,18 @@ def generate_method_code(path, method, operation):
         body_lines.append("        response = self._get(url, params=query_params)")
     elif method_lower == 'post':
         if has_body:
-            body_lines.append("        response = self._post(url, data=json_body)")
+            body_lines.append("        response = self._post(url, data=json_body, params=query_params)")
         else:
-            body_lines.append("        response = self._post(url, data={})")
+            body_lines.append("        response = self._post(url, data={}, params=query_params)")
     elif method_lower == 'put':
         if has_body:
-            body_lines.append("        response = self._put(url, data=json_body)")
+            body_lines.append("        response = self._put(url, data=json_body, params=query_params)")
         else:
-            body_lines.append("        response = self._put(url, data={})")
+            body_lines.append("        response = self._put(url, data={}, params=query_params)")
     elif method_lower == 'delete':
-        body_lines.append("        response = self._delete(url)")
+        body_lines.append("        response = self._delete(url, params=query_params)")
     else:
-        body_lines.append(f"        response = self._{method_lower}(url, data={{}})")
+        body_lines.append(f"        response = self._{method_lower}(url, data={{}}, params=query_params)")
     
     # Handle response
     body_lines.append("        response.raise_for_status()")
