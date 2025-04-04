@@ -2,6 +2,7 @@ import json
 import yaml
 import re
 from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 
 def convert_to_snake_case(identifier: str) -> str:
@@ -32,6 +33,43 @@ def load_schema(path: Path):
             return yaml.safe_load(f)
         else:
             return json.load(f)
+
+
+def determine_return_type(operation: Dict[str, Any]) -> str:
+    """
+    Determine the return type from the response schema.
+    
+    Args:
+        operation (dict): The operation details from the schema.
+    
+    Returns:
+        str: The appropriate return type annotation (List[Any], Dict[str, Any], or Any)
+    """
+    responses = operation.get('responses', {})
+    # Find successful response (2XX)
+    success_response = None
+    for code in responses:
+        if code.startswith('2'):
+            success_response = responses[code]
+            break
+    
+    if not success_response:
+        return "Any"  # Default to Any if no success response
+    
+    # Check if there's content with schema
+    if 'content' in success_response:
+        for content_type, content_info in success_response['content'].items():
+            if content_type.startswith('application/json') and 'schema' in content_info:
+                schema = content_info['schema']
+                
+                # Only determine if it's a list, dict, or unknown (Any)
+                if schema.get('type') == 'array':
+                    return "List[Any]"
+                elif schema.get('type') == 'object' or '$ref' in schema:
+                    return "Dict[str, Any]"
+    
+    # Default to Any if unable to determine
+    return "Any"
 
 
 def generate_api_client(schema):
@@ -86,7 +124,7 @@ def generate_api_client(schema):
     imports = [
         "from agentr.applications import APIApplication",
         "from agentr.integrations import Integration",
-        "from typing import Any, Dict"
+        "from typing import Any, Dict, List"
     ]
     
     # Construct the class code
@@ -136,17 +174,28 @@ def generate_method_code(path, method, operation):
     body_required = has_body and operation['requestBody'].get('required', False)
     
     # Build function arguments
-    args = []
+    required_args = []
+    optional_args = []
     for param in parameters:
         if param.get('required', False):
-            args.append(param['name'])
+            required_args.append(param['name'])
         else:
-            args.append(f"{param['name']}=None")
+            optional_args.append(f"{param['name']}=None")
     
+    # Add request body parameter
     if has_body:
-        args.append('request_body' if body_required else 'request_body=None')
+        if body_required:
+            required_args.append('request_body')
+        else:
+            optional_args.append('request_body=None')
     
-    signature = f"    def {func_name}(self, {', '.join(args)}) -> Dict[str, Any]:"
+    # Combine required and optional arguments
+    args = required_args + optional_args
+    
+    # Determine return type
+    return_type = determine_return_type(operation)
+    
+    signature = f"    def {func_name}(self, {', '.join(args)}) -> {return_type}:"
     
     # Build method body
     body_lines = []
@@ -172,10 +221,13 @@ def generate_method_code(path, method, operation):
     
     # Query parameters
     query_params = [p for p in parameters if p['in'] == 'query']
-    query_params_items = ', '.join([f"('{p['name']}', {p['name']})" for p in query_params])
-    body_lines.append(
-        f"        query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
-    )
+    if query_params:
+        query_params_items = ', '.join([f"('{p['name']}', {p['name']})" for p in query_params])
+        body_lines.append(
+            f"        query_params = {{k: v for k, v in [{query_params_items}] if v is not None}}"
+        )
+    else:
+        body_lines.append("        query_params = {}")
     
     # Request body handling for JSON
     if has_body:
@@ -187,18 +239,18 @@ def generate_method_code(path, method, operation):
         body_lines.append("        response = self._get(url, params=query_params)")
     elif method_lower == 'post':
         if has_body:
-            body_lines.append("        response = self._post(url, data=json_body)")
+            body_lines.append("        response = self._post(url, data=json_body, params=query_params)")
         else:
-            body_lines.append("        response = self._post(url, data={})")
+            body_lines.append("        response = self._post(url, data={}, params=query_params)")
     elif method_lower == 'put':
         if has_body:
-            body_lines.append("        response = self._put(url, data=json_body)")
+            body_lines.append("        response = self._put(url, data=json_body, params=query_params)")
         else:
-            body_lines.append("        response = self._put(url, data={})")
+            body_lines.append("        response = self._put(url, data={}, params=query_params)")
     elif method_lower == 'delete':
-        body_lines.append("        response = self._delete(url)")
+        body_lines.append("        response = self._delete(url, params=query_params)")
     else:
-        body_lines.append(f"        response = self._{method_lower}(url, data={{}})")
+        body_lines.append(f"        response = self._{method_lower}(url, data={{}}, params=query_params)")
     
     # Handle response
     body_lines.append("        response.raise_for_status()")
